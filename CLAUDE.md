@@ -9,11 +9,12 @@ There is a standalone setup script at `~/Documents/programs/img/comfyui-setup/` 
 ### `setup_comfyui.sh` — Full Installer
 
 ```bash
-bash setup_comfyui.sh [--models /path/to/shared/models] [install_dir]
+bash setup_comfyui.sh --models /home/ubuntu/Documents/programs/shared-docker-infra/models/image-gen/comfyui [install_dir]
 ```
 
 - `install_dir` defaults to `./ComfyUI` (relative to where you run the script)
 - `--models` is optional — if provided, writes `extra_model_paths.yaml` so ComfyUI can find checkpoints, loras, vae, etc. from a shared model storage directory
+- On this machine the shared models path is: `/home/ubuntu/Documents/programs/shared-docker-infra/models/image-gen/comfyui`
 - Idempotent: re-running pulls latest git changes instead of re-cloning
 
 **What it does (8 steps):**

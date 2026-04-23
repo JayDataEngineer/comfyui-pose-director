@@ -4,6 +4,7 @@ import importlib
 import io
 import json
 import os
+import subprocess
 import sys
 import time
 import types
@@ -49,6 +50,50 @@ POLL_INTERVAL = 2
 MAX_WAIT = 600  # 10 minutes max per workflow
 
 WORKFLOWS_DIR = PROJECT_ROOT / "workflows"
+
+CUI_DIR = "/home/ubuntu/Documents/programs/img/comfyui"
+CUI_PYTHON = os.path.join(CUI_DIR, ".venv/bin/python")
+CUI_PORT = 8465
+
+
+def restart_comfyui(timeout=120):
+    """Kill ComfyUI, wait for CUDA release, start a fresh instance."""
+    print("[ComfyUI] Stopping...")
+    subprocess.run(["pkill", "-f", f"main.py.*{CUI_PORT}"], check=False)
+    time.sleep(5)  # wait for CUDA memory release
+    env = {**os.environ, "PYTHONWARNINGS": "ignore::FutureWarning,ignore::SyntaxWarning"}
+    log_f = open("/tmp/cui_restart.log", "w")
+    subprocess.Popen(
+        [CUI_PYTHON, "main.py", "--port", str(CUI_PORT),
+         "--use-flash-attention", "--dont-upcast-attention"],
+        cwd=CUI_DIR, stdout=log_f, stderr=subprocess.STDOUT, env=env,
+    )
+    print("[ComfyUI] Waiting for startup...")
+    for _ in range(timeout // 2):
+        time.sleep(2)
+        try:
+            r = requests.get(f"http://127.0.0.1:{CUI_PORT}/system_stats", timeout=2)
+            if r.status_code == 200:
+                print("[ComfyUI] Ready.")
+                time.sleep(2)  # extra settling
+                return
+        except Exception:
+            pass
+    raise RuntimeError(f"ComfyUI failed to restart within {timeout}s")
+
+
+def stop_llama():
+    """Stop the orchestrator-llama Docker container to free VRAM."""
+    print("[llama.cpp] Stopping...")
+    subprocess.run(["docker", "stop", "orchestrator-llama"], check=False, timeout=30)
+    time.sleep(3)
+
+
+def start_llama():
+    """Start the orchestrator-llama Docker container."""
+    print("[llama.cpp] Starting...")
+    subprocess.run(["docker", "start", "orchestrator-llama"], check=False, timeout=30)
+    time.sleep(5)
 
 
 def submit_workflow(workflow: dict, timeout: int = MAX_WAIT, retries: int = 0) -> dict:

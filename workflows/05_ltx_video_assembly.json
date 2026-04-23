@@ -7,32 +7,32 @@
       "type": "LoadImage",
       "pos": [0, 0],
       "size": [315, 314],
-      "widgets_values": ["PoseDirector/keyframe_0_00001_.png", "image"],
-      "_comment": "Keyframe 0 (starting pose)"
+      "widgets_values": ["PoseDirector/edited_kf_0.png", "image"],
+      "_comment": "Edited keyframe 0 (VNCCS-edited character, NOT raw skeleton)"
     },
     {
       "id": 2,
       "type": "LoadImage",
       "pos": [0, 350],
       "size": [315, 314],
-      "widgets_values": ["PoseDirector/keyframe_1_00001_.png", "image"],
-      "_comment": "Keyframe 1"
+      "widgets_values": ["PoseDirector/edited_kf_1.png", "image"],
+      "_comment": "Edited keyframe 1"
     },
     {
       "id": 3,
       "type": "LoadImage",
       "pos": [0, 700],
       "size": [315, 314],
-      "widgets_values": ["PoseDirector/keyframe_2_00001_.png", "image"],
-      "_comment": "Keyframe 2"
+      "widgets_values": ["PoseDirector/edited_kf_2.png", "image"],
+      "_comment": "Edited keyframe 2"
     },
     {
       "id": 4,
       "type": "LoadImage",
       "pos": [0, 1050],
       "size": [315, 314],
-      "widgets_values": ["PoseDirector/keyframe_3_00001_.png", "image"],
-      "_comment": "Keyframe 3 (final pose)"
+      "widgets_values": ["PoseDirector/edited_kf_3.png", "image"],
+      "_comment": "Edited keyframe 3 (final pose)"
     },
     {
       "id": 5,
@@ -40,23 +40,23 @@
       "pos": [400, 0],
       "size": [315, 100],
       "widgets_values": ["ltx-2.3-22b-distilled-1.1-UD-Q4_K_M.gguf"],
-      "_comment": "LTX 2.3 Distilled 1.1 GGUF (Q4_K_M). Place in unet/ or diffusion_models/"
+      "_comment": "LTX 2.3 Distilled 1.1 GGUF (Q4_K_M, 16.4GB). Place in unet/ or diffusion_models/"
     },
     {
       "id": 6,
-      "type": "LTXVGemmaCLIPModelLoader",
+      "type": "DualCLIPLoaderGGUF",
       "pos": [400, 150],
       "size": [350, 100],
-      "widgets_values": ["gemma-3-12b-it/model.safetensors", "ltx-2.3_text_projection_bf16.safetensors", 256],
-      "_comment": "Loads Gemma 3 12B text encoder + LTXV embeddings connector. gemma_path from text_encoders/, ltxv_path from checkpoints/"
+      "widgets_values": ["gemma-3-12b-it-IQ4_XS.gguf", "ltxv_text_projection_dual.safetensors", "ltxv"],
+      "_comment": "IQ4_XS Gemma 3 12B (6.55GB) + LTXV text projection (2.2GB). Sequential loading: text encoder (7GB) → UNET (16GB) → VAE (1.5GB)"
     },
     {
       "id": 7,
       "type": "VAELoader",
       "pos": [400, 280],
       "size": [315, 60],
-      "widgets_values": ["taeltx2_3.safetensors"],
-      "_comment": "TAEHV tiny VAE for LTX 2.3. Much faster and less VRAM than full VAE."
+      "widgets_values": ["LTX23_video_vae_bf16.safetensors"],
+      "_comment": "Full Lighttricks VideoVAE (1.45GB). Required for LTXVAddGuideAdvanced. NOT taeltx2_3.safetensors (incompatible)."
     },
     {
       "id": 8,
@@ -163,11 +163,12 @@
   "extra": {
     "_note": "Chain LTXVAddGuideAdvanced nodes: each takes (positive, negative, latent) from previous, adds its keyframe at frame_idx, passes along. KSampler takes final chained output. For 9+ frame videos, frame_idx MUST be divisible by 8.",
     "_frame_numbering": "33 frames → guides at 0, 8, 16, 24 (4 keyframes evenly spaced). Last guide at 24, video ends at frame 32.",
+    "_vram_management": "RTX 4090 (24GB): Sequential loading — text encoder (7GB) offloaded before UNET (16GB) loads. Restart ComfyUI between pipeline stages to clear accumulated VRAM.",
     "_model_requirements": {
-      "unet": "ltx-2.3-22b-distilled-1.1-UD-Q4_K_M.gguf in unet/",
-      "text_encoder": "Gemma 3 12B in text_encoders/gemma-3-12b-it/ (with tokenizer.model, config.json, model.safetensors)",
-      "checkpoint_for_connector": "ltx-2.3_text_projection_bf16.safetensors in checkpoints/",
-      "vae": "taeltx2_3.safetensors in vae/"
+      "unet": "ltx-2.3-22b-distilled-1.1-UD-Q4_K_M.gguf in unet/ (16.4GB)",
+      "text_encoder": "gemma-3-12b-it-IQ4_XS.gguf in clip/ (6.55GB) — loaded via DualCLIPLoaderGGUF",
+      "text_projection": "ltxv_text_projection_dual.safetensors in text_encoders/ (2.2GB) — dual_linear projection weights",
+      "vae": "LTX23_video_vae_bf16.safetensors in vae/ (1.45GB) — full VideoVAE, NOT taeltx2_3.safetensors"
     }
   },
   "version": 0.4

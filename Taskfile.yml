@@ -1,0 +1,193 @@
+version: '3'
+
+vars:
+  CUI_DIR: /home/ubuntu/Documents/programs/img/comfyui
+  CUI_PYTHON: "{{.CUI_DIR}}/.venv/bin/python"
+  CUI_PORT: 8465
+  LLAMA_CONTAINER: orchestrator-llama
+  LLAMA_PORT: 8001
+  MODELS_DIR: /home/ubuntu/Documents/programs/shared-docker-infra/models/llm
+  VISION_DIR: /home/ubuntu/Documents/programs/shared-docker-infra/models/vision
+  LLAMA_IMAGE: ghcr.io/ggml-org/llama.cpp:server-cuda
+  CUI_PID_FILE: /tmp/comfyui_pose_director.pid
+
+tasks:
+  # ── ComfyUI ──────────────────────────────────────────────────────────
+
+  comfyui:start:
+    desc: Start ComfyUI on port 8465
+    cmds:
+      - |
+        if curl -sf http://127.0.0.1:{{.CUI_PORT}}/system_stats > /dev/null 2>&1; then
+          echo "ComfyUI already running on port {{.CUI_PORT}}"
+          exit 0
+        fi
+        echo "Starting ComfyUI..."
+        cd {{.CUI_DIR}} && \
+        PYTHONWARNINGS="ignore::FutureWarning,ignore::SyntaxWarning" \
+        {{.CUI_PYTHON}} main.py \
+          --port {{.CUI_PORT}} \
+          --use-flash-attention \
+          --dont-upcast-attention \
+          > /tmp/comfyui.log 2>&1 &
+        echo $! > {{.CUI_PID_FILE}}
+        echo "Waiting for ComfyUI..."
+        for i in $(seq 1 60); do
+          sleep 2
+          if curl -sf http://127.0.0.1:{{.CUI_PORT}}/system_stats > /dev/null 2>&1; then
+            echo "ComfyUI ready (PID $(cat {{.CUI_PID_FILE}}))"
+            exit 0
+          fi
+        done
+        echo "ERROR: ComfyUI failed to start within 120s" >&2
+        exit 1
+
+  comfyui:stop:
+    desc: Stop ComfyUI
+    cmds:
+      - pkill -f "main.py.*{{.CUI_PORT}}" || true
+      - sleep 3
+      - echo "ComfyUI stopped"
+    status:
+      - "! pgrep -f 'main.py.*{{.CUI_PORT}}' > /dev/null 2>&1"
+
+  comfyui:restart:
+    desc: Restart ComfyUI (clears VRAM)
+    cmds:
+      - task: comfyui:stop
+      - sleep 5
+      - task: comfyui:start
+
+  comfyui:logs:
+    desc: Follow ComfyUI logs
+    cmds:
+      - tail -f /tmp/comfyui.log
+
+  comfyui:status:
+    desc: Check if ComfyUI is running
+    cmds:
+      - |
+        if curl -sf http://127.0.0.1:{{.CUI_PORT}}/system_stats > /dev/null 2>&1; then
+          echo "ComfyUI: RUNNING on port {{.CUI_PORT}}"
+        else
+          echo "ComfyUI: STOPPED"
+        fi
+
+  # ── llama.cpp ────────────────────────────────────────────────────────
+
+  llama:start:
+    desc: Start llama.cpp (creates container if missing)
+    cmds:
+      # Create container if it doesn't exist
+      - |
+        if ! docker ps -a --filter name={{.LLAMA_CONTAINER}} -q | grep -q .; then
+          echo "Creating llama.cpp container..."
+          docker run -d --name {{.LLAMA_CONTAINER}} \
+            --gpus all \
+            -p {{.LLAMA_PORT}}:8001 \
+            -v "{{.MODELS_DIR}}:/models:ro" \
+            -v "{{.VISION_DIR}}:/vision:ro" \
+            {{.LLAMA_IMAGE}} \
+            --model /models/Qwen3.6-35B-A3B-UD-IQ4_NL.gguf \
+            --alias qwen3.6-35b-a3b \
+            --port 8001 --host 0.0.0.0 \
+            --jinja --flash-attn on \
+            --ctx-size 8192 \
+            --mmproj /vision/Qwen3.6-35B-A3B-UD-IQ4_NL_mmproj-BF16.gguf \
+            --cache-type-k q8_0 --cache-type-v q8_0 \
+            --batch-size 512 --ubatch-size 512 \
+            --cont-batching --parallel 4 --metrics \
+            --reasoning-format deepseek
+        fi
+      # Start if stopped
+      - docker start {{.LLAMA_CONTAINER}} 2>/dev/null || true
+      - |
+        echo "Waiting for llama.cpp..."
+        for i in $(seq 1 60); do
+          if curl -sf http://127.0.0.1:{{.LLAMA_PORT}}/health > /dev/null 2>&1; then
+            echo "llama.cpp ready"
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "WARNING: llama.cpp health check timed out"
+
+  llama:stop:
+    desc: Stop llama.cpp (free ~17GB VRAM)
+    cmds:
+      - docker stop {{.LLAMA_CONTAINER}} 2>/dev/null || true
+      - sleep 3
+      - echo "llama.cpp stopped (~17GB VRAM freed)"
+    status:
+      - "! docker ps --filter name={{.LLAMA_CONTAINER}} --filter status=running -q | grep -q ."
+
+  llama:remove:
+    desc: Remove llama.cpp container entirely
+    cmds:
+      - docker rm -f {{.LLAMA_CONTAINER}} 2>/dev/null || true
+
+  llama:logs:
+    desc: Follow llama.cpp logs
+    cmds:
+      - docker logs -f {{.LLAMA_CONTAINER}}
+
+  # ── Combined ─────────────────────────────────────────────────────────
+
+  up:
+    desc: Start all services (llama.cpp + ComfyUI)
+    cmds:
+      - task: llama:start
+      - task: comfyui:start
+      - task: status
+
+  down:
+    desc: Stop all services
+    cmds:
+      - task: comfyui:stop
+      - task: llama:stop
+      - echo "All services stopped"
+
+  status:
+    desc: Show status of all services
+    cmds:
+      - task: comfyui:status
+      - |
+        if docker ps --filter name={{.LLAMA_CONTAINER}} --filter status=running -q | grep -q .; then
+          echo "llama.cpp: RUNNING on port {{.LLAMA_PORT}}"
+        elif docker ps -a --filter name={{.LLAMA_CONTAINER}} -q | grep -q .; then
+          echo "llama.cpp: STOPPED (container exists)"
+        else
+          echo "llama.cpp: NOT CREATED (run 'task llama:start' to create)"
+        fi
+      - |
+        VRAM=$(nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null || echo "N/A")
+        if [ "$VRAM" != "N/A" ]; then
+          echo "VRAM: ${VRAM} MB"
+        fi
+
+  # ── Tests ────────────────────────────────────────────────────────────
+
+  test:
+    desc: Run unit tests
+    cmds:
+      - uv run pytest tests/unit/ -v {{.CLI_ARGS}}
+
+  test:integration:
+    desc: Run integration tests (requires ComfyUI)
+    cmds:
+      - task: comfyui:start
+      - uv run pytest tests/integration/ -v -s {{.CLI_ARGS}}
+
+  e2e:
+    desc: Run E2E test (starts ComfyUI, stops llama for VRAM, runs test)
+    cmds:
+      - task: comfyui:start
+      - task: llama:stop
+      - echo "=== Running E2E tests ==="
+      - ZAI_API_KEY=REDACTED_ZAI_KEY RUN_E2E=1 uv run pytest tests/e2e/ -v -s {{.CLI_ARGS}}
+      - task: llama:start
+
+  e2e:quick:
+    desc: Run E2E test without starting services (assumes they're running)
+    cmds:
+      - RUN_E2E=1 uv run pytest tests/e2e/ -v -s {{.CLI_ARGS}}

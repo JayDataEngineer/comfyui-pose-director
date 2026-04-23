@@ -283,6 +283,7 @@ def pytest_collection_modifyitems(config, items):
             except Exception:
                 item.add_marker(skip_integration)
         if "requires_api_key" in item.keywords:
+            has_zai = bool(os.environ.get("ZAI_API_KEY"))
             has_gemini = bool(os.environ.get("GEMINI_API_KEY"))
             has_llama = False
             try:
@@ -290,7 +291,7 @@ def pytest_collection_modifyitems(config, items):
                 has_llama = r.status_code == 200
             except Exception:
                 pass
-            if not has_gemini and not has_llama:
+            if not has_zai and not has_gemini and not has_llama:
                 item.add_marker(skip_api)
 
 
@@ -314,8 +315,17 @@ def gemini_api_key():
 def llm_config(gemini_api_key):
     """Return (base_url, model, api_key) for LLM calls.
 
-    Prefers local llama.cpp (no rate limits), falls back to Gemini API.
+    Prefers ZAI cloud API (no VRAM), falls back to local llama.cpp, then Gemini.
     """
+    zai_key = os.environ.get("ZAI_API_KEY", "")
+    if zai_key:
+        print("Using ZAI cloud API (glm-4.5-air)")
+        return (
+            "https://api.z.ai/api/coding/paas/v4",
+            "glm-4.5-air",
+            zai_key,
+        )
+
     try:
         r = requests.get("http://127.0.0.1:8001/health", timeout=2)
         if r.status_code == 200:
@@ -334,7 +344,7 @@ def llm_config(gemini_api_key):
             gemini_api_key,
         )
 
-    pytest.skip("No LLM available (need llama.cpp on :8001 or GEMINI_API_KEY)")
+    pytest.skip("No LLM available (need ZAI_API_KEY, llama.cpp on :8001, or GEMINI_API_KEY)")
 
 
 @pytest.fixture(scope="session")

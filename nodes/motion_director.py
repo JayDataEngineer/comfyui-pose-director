@@ -96,6 +96,11 @@ Respond with ONLY the JSON keyframes object."""
         response = call_llm(base_url, api_key, model, SYSTEM_PROMPT, user_msg)
 
         keyframes_data = parse_llm_json(response)
+        print(f"[MotionDirector] Parsed: type={type(keyframes_data).__name__}, "
+              f"keys={list(keyframes_data.keys()) if isinstance(keyframes_data, dict) else 'list len=' + str(len(keyframes_data))}")
+        # LLM may return a list wrapping the dict — unwrap it
+        if isinstance(keyframes_data, list):
+            keyframes_data = keyframes_data[0] if keyframes_data else {}
         keyframes = keyframes_data["keyframes"]
         keyframes_json = json.dumps(keyframes_data)
 

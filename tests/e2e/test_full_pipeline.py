@@ -16,7 +16,7 @@ from PIL import Image
 
 from conftest import (
     submit_workflow, get_output_images, get_output_video, upload_image,
-    restart_comfyui, stop_llama, start_llama,
+    restart_comfyui,
 )
 
 
@@ -94,9 +94,7 @@ def e2e_result(comfyui, llm_config):
     for i, kf_bytes in enumerate(kf_images):
         upload_image(kf_bytes, f"e2e_kf_{i}.png", "PoseDirector")
 
-    # Free VRAM for Steps D+E: stop llama.cpp (~17GB GPU VRAM) and restart ComfyUI
-    # Step C was the last one needing the LLM. Steps D and E need all 24GB for diffusion models.
-    stop_llama()
+    # Restart ComfyUI to clear OpenPose + MotionDirector from VRAM before loading Qwen Edit
     restart_comfyui()
 
     # ── Step D: Edit ALL keyframes with VNCCS QWEN Encoder ────────────
@@ -242,8 +240,6 @@ def e2e_result(comfyui, llm_config):
     }
     video_result = submit_workflow(video_workflow, timeout=900, retries=2)
     print("[E2E] Step E done")
-    # Restart llama.cpp LLM server (stopped to free VRAM for Step E)
-    start_llama()
     return video_result
 
 

@@ -35,12 +35,19 @@ def _retry_loop(client, model, messages, temperature, max_retries):
                 model=model,
                 messages=messages,
                 temperature=temperature,
-                max_tokens=8192,
+                max_tokens=16384,
             )
-            content = response.choices[0].message.content
+            msg = response.choices[0].message
+            content = msg.content
+            # For thinking models (deepseek reasoning format), the actual
+            # answer goes in .content and thinking in .reasoning_content.
+            # If content is empty, the model spent all tokens thinking — retry.
             if content and content.strip():
                 return content
-            # Empty response (thinking model consumed all tokens) — retry
+            # Fallback: some models put JSON in reasoning_content
+            reasoning = getattr(msg, 'reasoning_content', None) or ''
+            if reasoning and reasoning.strip():
+                return reasoning
             logger.warning(f"LLM returned empty content (attempt {attempt + 1}/{max_retries})")
             last_error = RuntimeError("Empty LLM response")
         except APITimeoutError as e:

@@ -1,0 +1,35 @@
+[project]
+name = "comfyui-pose-director"
+version = "0.1.0"
+description = "AI-driven skeleton manipulation nodes for ComfyUI"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = [
+    "openai>=1.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+    "requests>=2.31",
+    "Pillow>=10.0",
+    "numpy>=1.26",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["nodes*", "utils*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "unit: pure Python tests, no ComfyUI or API needed",
+    "integration: requires running ComfyUI on port 8465",
+    "e2e: full end-to-end pipeline, very slow",
+    "requires_api_key: needs GEMINI_API_KEY env var",
+]
+testpaths = ["tests"]
+norecursedirs = ["workflows", "nodes", "utils"]
+addopts = "-v --tb=short"

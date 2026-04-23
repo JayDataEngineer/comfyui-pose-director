@@ -1,0 +1,112 @@
+{
+  "last_node_id": 10,
+  "last_link_id": 9,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "UNETLoader",
+      "pos": [0, 0],
+      "size": [315, 100],
+      "widgets_values": ["z_image_turbo_bf16.safetensors", "default"],
+      "_comment": "Z-Image Turbo (8-step distilled). Use z_image_bf16.safetensors for base (50-step) variant."
+    },
+    {
+      "id": 2,
+      "type": "CLIPLoader",
+      "pos": [0, 150],
+      "size": [315, 80],
+      "widgets_values": ["qwen_3_4b.safetensors", "lumina2"],
+      "_comment": "Type MUST be 'lumina2' — this is how ComfyUI routes to Z-Image's Qwen 3 4B text encoder"
+    },
+    {
+      "id": 3,
+      "type": "VAELoader",
+      "pos": [0, 280],
+      "size": [315, 60],
+      "widgets_values": ["ae.safetensors"],
+      "_comment": "Z-Image's own VAE (ae.safetensors), NOT qwen_image_vae.safetensors"
+    },
+    {
+      "id": 4,
+      "type": "ModelSamplingAuraFlow",
+      "pos": [400, 0],
+      "size": [315, 80],
+      "widgets_values": [3.0],
+      "_comment": "Sets shift=3 for S3-DiT noise schedule. Required for Z-Image."
+    },
+    {
+      "id": 5,
+      "type": "CLIPTextEncode",
+      "pos": [400, 150],
+      "size": [500, 200],
+      "widgets_values": ["Full body portrait, wide shot from head to toe. 90s OVA anime cel of a young woman with short blue-black hair, piercing red eyes, wearing a dark teal military-style jacket with gold epaulettes over a white turtleneck, dark pants, boots. Stern expression, standing in a relaxed pose with arms at sides, feet shoulder-width apart. Clean white background. Cel-shaded animation, visible paint strokes, muted color palette, anime screencap from 1992."],
+      "_comment": "Describe your character in detail. See z_img_expert/PREPROMPT.md for prompting guide. Lead with era/style, then body, clothing, pose, background."
+    },
+    {
+      "id": 6,
+      "type": "ConditioningZeroOut",
+      "pos": [400, 400],
+      "size": [315, 60],
+      "_comment": "Zeros negative conditioning. Z-Image Turbo ignores negative prompts (CFG=1). For Z-Image Base, replace this with a second CLIPTextEncode for the negative prompt."
+    },
+    {
+      "id": 7,
+      "type": "EmptySD3LatentImage",
+      "pos": [400, 500],
+      "size": [315, 120],
+      "widgets_values": [768, 1024, 1],
+      "_comment": "Portrait dimensions for full-body character generation. 768x1024 gives a 3:4 aspect ratio."
+    },
+    {
+      "id": 8,
+      "type": "KSampler",
+      "pos": [800, 150],
+      "size": [315, 260],
+      "widgets_values": [42, "fixed", 8, 1.0, "res_multistep", "simple"],
+      "_comment": "Turbo settings: 8 steps, CFG 1.0, res_multistep sampler. For Z-Image Base: 50 steps, CFG 4.0, euler sampler, normal scheduler"
+    },
+    {
+      "id": 9,
+      "type": "VAEDecode",
+      "pos": [1200, 150],
+      "size": [210, 80]
+    },
+    {
+      "id": 10,
+      "type": "SaveImage",
+      "pos": [1500, 150],
+      "size": [315, 270],
+      "widgets_values": ["PoseDirector/character"]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 4, 0, "MODEL"],
+    [2, 2, 0, 5, 0, "CLIP"],
+    [3, 2, 0, 6, 0, "CLIP"],
+    [4, 4, 0, 8, 0, "MODEL"],
+    [5, 5, 0, 8, 1, "CONDITIONING"],
+    [6, 6, 0, 8, 2, "CONDITIONING"],
+    [7, 7, 0, 8, 3, "LATENT"],
+    [8, 8, 0, 9, 0, "LATENT"],
+    [9, 3, 0, 9, 1, "VAE"]
+  ],
+  "config": {},
+  "extra": {
+    "_z_image_turbo_settings": {
+      "steps": 8,
+      "cfg": 1.0,
+      "sampler": "res_multistep",
+      "scheduler": "simple",
+      "no_negative_prompt": true
+    },
+    "_z_image_base_settings": {
+      "steps": 50,
+      "cfg": 4.0,
+      "sampler": "euler",
+      "scheduler": "normal",
+      "negative_prompt": "bad quality, worst quality, blurry, deformed, extra fingers"
+    },
+    "_prompt_guide": "See ~/Documents/programs/creative/z_img_expert/PREPROMPT.md for full Z-Image prompting guide. Lead with style/era, describe subject, then pose, then background. Aim for 80-200 words."
+  },
+  "version": 0.4
+}

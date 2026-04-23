@@ -1,0 +1,109 @@
+{
+  "last_node_id": 10,
+  "last_link_id": 11,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [0, 0],
+      "size": [315, 314],
+      "widgets_values": ["PoseDirector/keyframe_0_00001_.png", "image"],
+      "_comment": "Load a generated keyframe image to edit"
+    },
+    {
+      "id": 2,
+      "type": "UnetLoaderGGUF",
+      "pos": [0, 400],
+      "size": [315, 100],
+      "widgets_values": ["ltx-2.3-22b-distilled-1.1-UD-Q4_K_M.gguf"],
+      "_comment": "LTX 2.3 Distilled 1.1 GGUF"
+    },
+    {
+      "id": 3,
+      "type": "LTXICLoRALoaderModelOnly",
+      "pos": [400, 400],
+      "size": [315, 100],
+      "widgets_values": ["ltx23_edit_anything_global_rank128_v1_9000steps_adamw.safetensors", 1.0],
+      "_comment": "Loads EditAnything IC-LoRA. Output includes latent_downscale_factor from LoRA metadata."
+    },
+    {
+      "id": 4,
+      "type": "LTXVGemmaCLIPModelLoader",
+      "pos": [0, 550],
+      "size": [350, 100],
+      "widgets_values": ["gemma-3-12b-it/model.safetensors", "ltx-2.3_text_projection_bf16.safetensors", 256],
+      "_comment": "Gemma 3 12B text encoder + LTXV connector"
+    },
+    {
+      "id": 5,
+      "type": "CLIPTextEncode",
+      "pos": [400, 550],
+      "size": [400, 150],
+      "widgets_values": ["Remove visual artifacts. Fix the character's hands. Clean up the background."],
+      "_comment": "Edit instruction. Change prompt for different edits: Add/Remove/Replace/Convert"
+    },
+    {
+      "id": 6,
+      "type": "VAELoader",
+      "pos": [0, 670],
+      "size": [315, 60],
+      "widgets_values": ["taeltx2_3.safetensors"],
+      "_comment": "TAEHV tiny VAE for LTX 2.3"
+    },
+    {
+      "id": 7,
+      "type": "EmptyLTXVLatentVideo",
+      "pos": [0, 200],
+      "size": [315, 120],
+      "widgets_values": [512, 512, 9, 1],
+      "_comment": "512x512, 9 frames (single image edit), batch 1"
+    },
+    {
+      "id": 8,
+      "type": "LTXAddVideoICLoRAGuide",
+      "pos": [800, 300],
+      "size": [350, 300],
+      "widgets_values": [0, 1.0, 1.0, "disabled", false, 256, 64],
+      "_comment": "Adds the reference image at frame 0 with EditAnything IC-LoRA conditioning"
+    },
+    {
+      "id": 9,
+      "type": "KSampler",
+      "pos": [1250, 300],
+      "size": [315, 260],
+      "widgets_values": [42, "fixed", 30, 1.0, "euler", "simple"]
+    },
+    {
+      "id": 10,
+      "type": "SaveImage",
+      "pos": [1650, 300],
+      "size": [315, 270],
+      "widgets_values": ["PoseDirector/edit_anything"]
+    }
+  ],
+  "links": [
+    [1, 2, 0, 3, 0, "MODEL"],
+    [2, 4, 0, 5, 0, "CLIP"],
+    [3, 5, 0, 8, 0, "CONDITIONING"],
+    [4, 5, 0, 8, 1, "CONDITIONING"],
+    [5, 6, 0, 8, 2, "VAE"],
+    [6, 7, 0, 8, 3, "LATENT"],
+    [7, 1, 0, 8, 4, "IMAGE"],
+    [8, 8, 0, 9, 1, "CONDITIONING"],
+    [9, 8, 1, 9, 2, "CONDITIONING"],
+    [10, 8, 2, 9, 3, "LATENT"],
+    [11, 3, 0, 9, 0, "MODEL"]
+  ],
+  "config": {},
+  "extra": {
+    "_prompt_patterns": {
+      "Add": "Add a sword in the character's hand",
+      "Remove": "Remove the background clutter",
+      "Replace": "Replace the blue shirt with a red jacket",
+      "Convert": "Convert the art style to watercolor"
+    },
+    "_lora_source": "https://huggingface.co/Alissonerdx/LTX-LoRAs",
+    "_note": "Uses LTXAddVideoICLoRAGuide (IC-LoRA version) for EditAnything. Takes positive/negative conditioning, VAE, latent, image. LTXVGemmaCLIPModelLoader provides the Gemma 3 12B text encoder."
+  },
+  "version": 0.4
+}

@@ -1,0 +1,174 @@
+{
+  "last_node_id": 20,
+  "last_link_id": 24,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [0, 0],
+      "size": [315, 314],
+      "widgets_values": ["PoseDirector/keyframe_0_00001_.png", "image"],
+      "_comment": "Keyframe 0 (starting pose)"
+    },
+    {
+      "id": 2,
+      "type": "LoadImage",
+      "pos": [0, 350],
+      "size": [315, 314],
+      "widgets_values": ["PoseDirector/keyframe_1_00001_.png", "image"],
+      "_comment": "Keyframe 1"
+    },
+    {
+      "id": 3,
+      "type": "LoadImage",
+      "pos": [0, 700],
+      "size": [315, 314],
+      "widgets_values": ["PoseDirector/keyframe_2_00001_.png", "image"],
+      "_comment": "Keyframe 2"
+    },
+    {
+      "id": 4,
+      "type": "LoadImage",
+      "pos": [0, 1050],
+      "size": [315, 314],
+      "widgets_values": ["PoseDirector/keyframe_3_00001_.png", "image"],
+      "_comment": "Keyframe 3 (final pose)"
+    },
+    {
+      "id": 5,
+      "type": "UnetLoaderGGUF",
+      "pos": [400, 0],
+      "size": [315, 100],
+      "widgets_values": ["ltx-2.3-22b-distilled-1.1-UD-Q4_K_M.gguf"],
+      "_comment": "LTX 2.3 Distilled 1.1 GGUF (Q4_K_M). Place in unet/ or diffusion_models/"
+    },
+    {
+      "id": 6,
+      "type": "LTXVGemmaCLIPModelLoader",
+      "pos": [400, 150],
+      "size": [350, 100],
+      "widgets_values": ["gemma-3-12b-it/model.safetensors", "ltx-2.3_text_projection_bf16.safetensors", 256],
+      "_comment": "Loads Gemma 3 12B text encoder + LTXV embeddings connector. gemma_path from text_encoders/, ltxv_path from checkpoints/"
+    },
+    {
+      "id": 7,
+      "type": "VAELoader",
+      "pos": [400, 280],
+      "size": [315, 60],
+      "widgets_values": ["taeltx2_3.safetensors"],
+      "_comment": "TAEHV tiny VAE for LTX 2.3. Much faster and less VRAM than full VAE."
+    },
+    {
+      "id": 8,
+      "type": "CLIPTextEncode",
+      "pos": [400, 400],
+      "size": [400, 150],
+      "widgets_values": ["A character waving their right hand in a friendly greeting. Smooth natural motion between poses."],
+      "_comment": "Motion description — describes the overall scene motion"
+    },
+    {
+      "id": 9,
+      "type": "EmptyLTXVLatentVideo",
+      "pos": [400, 600],
+      "size": [315, 120],
+      "widgets_values": [512, 512, 33, 1],
+      "_comment": "512x512, 33 frames (divisible by 8 + 1), batch 1. Widgets: width, height, length, batch_size"
+    },
+    {
+      "id": 10,
+      "type": "LTXVAddGuideAdvanced",
+      "pos": [800, 0],
+      "size": [315, 200],
+      "widgets_values": [0, 1.0, 29, 0, "lanczos", "disabled"],
+      "_comment": "Keyframe 0 at frame_idx=0"
+    },
+    {
+      "id": 11,
+      "type": "LTXVAddGuideAdvanced",
+      "pos": [800, 300],
+      "size": [315, 200],
+      "widgets_values": [8, 1.0, 29, 0, "lanczos", "disabled"],
+      "_comment": "Keyframe 1 at frame_idx=8"
+    },
+    {
+      "id": 12,
+      "type": "LTXVAddGuideAdvanced",
+      "pos": [800, 600],
+      "size": [315, 200],
+      "widgets_values": [16, 1.0, 29, 0, "lanczos", "disabled"],
+      "_comment": "Keyframe 2 at frame_idx=16"
+    },
+    {
+      "id": 13,
+      "type": "LTXVAddGuideAdvanced",
+      "pos": [800, 900],
+      "size": [315, 200],
+      "widgets_values": [24, 1.0, 29, 0, "lanczos", "disabled"],
+      "_comment": "Keyframe 3 at frame_idx=24"
+    },
+    {
+      "id": 14,
+      "type": "KSampler",
+      "pos": [1200, 300],
+      "size": [315, 260],
+      "widgets_values": [42, "fixed", 30, 1.0, "euler", "simple"],
+      "_comment": "Takes the chained conditioning from the last LTXVAddGuideAdvanced"
+    },
+    {
+      "id": 15,
+      "type": "VAEDecode",
+      "pos": [1200, 600],
+      "size": [210, 80],
+      "_comment": "Decode latents to video frames"
+    },
+    {
+      "id": 16,
+      "type": "VHSVideoCombine",
+      "pos": [1500, 300],
+      "size": [315, 200],
+      "widgets_values": ["PoseDirector/output", 24, 0, "auto", "libx264", "mp4", false, false],
+      "_comment": "Combine frames into video. 24 fps, mp4 output."
+    }
+  ],
+  "links": [
+    [1, 8, 0, 10, 0, "CONDITIONING"],
+    [2, 8, 0, 10, 1, "CONDITIONING"],
+    [3, 7, 0, 10, 2, "VAE"],
+    [4, 9, 0, 10, 3, "LATENT"],
+    [5, 1, 0, 10, 4, "IMAGE"],
+    [6, 10, 0, 11, 0, "CONDITIONING"],
+    [7, 10, 1, 11, 1, "CONDITIONING"],
+    [8, 7, 0, 11, 2, "VAE"],
+    [9, 10, 2, 11, 3, "LATENT"],
+    [10, 2, 0, 11, 4, "IMAGE"],
+    [11, 11, 0, 12, 0, "CONDITIONING"],
+    [12, 11, 1, 12, 1, "CONDITIONING"],
+    [13, 7, 0, 12, 2, "VAE"],
+    [14, 11, 2, 12, 3, "LATENT"],
+    [15, 3, 0, 12, 4, "IMAGE"],
+    [16, 12, 0, 13, 0, "CONDITIONING"],
+    [17, 12, 1, 13, 1, "CONDITIONING"],
+    [18, 7, 0, 13, 2, "VAE"],
+    [19, 12, 2, 13, 3, "LATENT"],
+    [20, 4, 0, 13, 4, "IMAGE"],
+    [21, 5, 0, 14, 0, "MODEL"],
+    [22, 13, 0, 14, 1, "CONDITIONING"],
+    [23, 13, 1, 14, 2, "CONDITIONING"],
+    [24, 13, 2, 14, 3, "LATENT"],
+    [25, 14, 0, 15, 0, "LATENT"],
+    [26, 7, 0, 15, 1, "VAE"],
+    [27, 15, 0, 16, 0, "IMAGE"]
+  ],
+  "config": {},
+  "extra": {
+    "_note": "Chain LTXVAddGuideAdvanced nodes: each takes (positive, negative, latent) from previous, adds its keyframe at frame_idx, passes along. KSampler takes final chained output. For 9+ frame videos, frame_idx MUST be divisible by 8.",
+    "_frame_numbering": "33 frames → guides at 0, 8, 16, 24 (4 keyframes evenly spaced). Last guide at 24, video ends at frame 32.",
+    "_model_requirements": {
+      "unet": "ltx-2.3-22b-distilled-1.1-UD-Q4_K_M.gguf in unet/",
+      "text_encoder": "Gemma 3 12B in text_encoders/gemma-3-12b-it/ (with tokenizer.model, config.json, model.safetensors)",
+      "checkpoint_for_connector": "ltx-2.3_text_projection_bf16.safetensors in checkpoints/",
+      "vae": "taeltx2_3.safetensors in vae/"
+    }
+  },
+  "version": 0.4
+}

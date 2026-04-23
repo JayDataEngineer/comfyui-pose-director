@@ -69,28 +69,72 @@ PYTHONWARNINGS="ignore::FutureWarning,ignore::SyntaxWarning" uv run main.py --po
 
 ## Pose Director Architecture
 
-### Pipeline
+### End-to-End Pipeline
+
+The full anime scene creation pipeline has 6 stages. Our extension handles step C.
+
 ```
-Base Image → DWPose (extract skeleton)
-                  ↓
-         LLM Pose Director (this extension)
-                  ↓
-         OpenPose keyframes (static or motion)
-                  ↓
-         Qwen Image Edit (apply poses to character)
-                  ↓
-         LTX Video Sequencer (animate between keyframes)
+A. Character Concept    Z-Image → initial character design
+B. Character Sheet      Qwen Image Edit → full-body turnaround sheet
+C. Pose Manipulation    OpenposePreprocessor → PoseManipulator/MotionDirector → skeleton keyframes  ← THIS EXTENSION
+D. Video Generation     LTX Video 2.3 with keyframe guides → animated clips
+E. Post-Processing      LTX EditAnything IC-LoRA → fix artifacts, add/remove elements
+F. Lip Sync + Final     (future) → final composited scene
 ```
+
+### Static Pose Workflow (single keyframe)
+```
+LoadImage → OpenposePreprocessor → PoseManipulator(Gemini) → skeleton IMAGE
+                                                      ↓
+CheckpointLoader + CLIPLoader(qwenedit) + VAELoader(qwenedit-vae)
+                                                      ↓
+VNCCS_QWEN_Encoder(image1=character, image2=skeleton, prompt, instruction)
+                                                      ↓
+KSampler → VAEDecode → SaveImage (pose-edited character)
+```
+
+### Motion Keyframe Workflow (multiple keyframes)
+```
+LoadImage → OpenposePreprocessor → MotionDirector(Gemini, N=4 keyframes) → IMAGE batch
+                                                                ↓
+ImpactImageBatchToImageList (split batch into individual images)
+                                                                ↓
+For EACH keyframe:
+  VNCCS_QWEN_Encoder(image1=character, image2=keyframe_skeleton) → KSampler → VAEDecode → SaveImage
+                                                                ↓
+For LTX Video:
+  Load each saved keyframe → LTXVAddGuideAdvanced(frame_idx=0,8,16,24)
+  → LTXVSampler → VAEDecode → VideoCombine
+```
+
+### LTX EditAnything Post-Processing (Step E)
+After generating video, use LTX EditAnything IC-LoRA for fixes:
+- **LoRA model**: `ltx23_edit_anything_global_rank128_v1_9000steps_adamw.safetensors`
+- **Source**: Alissonerdx/LTX-LoRAs on HuggingFace
+- **Load via**: `LTXICLoRALoaderModelOnly` node
+- **Prompt patterns**: "Add [object]", "Remove [object]", "Replace [X] with [Y]", "Convert [X] to [Y]"
+- **Use for**: fixing artifacts, adding/removing scene elements, style adjustments
 
 ### Nodes
 1. **PoseManipulator** — Takes an existing OpenPose skeleton + text prompt → LLM recalculates joint positions → outputs modified skeleton image.
 2. **MotionDirector** — Takes a starting pose + text description of movement → LLM generates keyframes (not every frame, just anchors at evenly spaced frame numbers) → outputs batch of OpenPose skeleton images.
 3. **PoseRenderer** — Converts OpenPose keypoints JSON into a skeleton image. Standalone renderer, also used internally by the other two nodes.
+4. **PoseExtractor** — Bridge node: extracts body keypoints from OpenposePreprocessor's POSE_KEYPOINT output into flat JSON. Handles coordinate denormalization (0-1 → pixel).
 
 ### Key Design Decisions
 - **Keyframes only, not full animation.** LTX 2.3 handles interpolation between anchor frames natively. The LLM just needs to produce 3-5 key poses.
-- **OpenAI-compatible API.** Works with any provider (Ollama, LM Studio, Gemini via proxy, OpenAI). Each node takes `base_url`, `api_key`, and `model` as inputs.
-- **No extra dependencies beyond `openai`.** The API client uses `urllib` directly. Flash attention and torch come from the ComfyUI environment.
+- **OpenAI-compatible API.** Uses the `openai` Python package. Works with any provider (Ollama, LM Studio, LiteLLM proxy, OpenAI). Each node takes `base_url`, `api_key`, and `model` as inputs.
+- **POSE_KEYPOINT compatibility.** Nodes accept both STRING (JSON) and POSE_KEYPOINT (from OpenposePreprocessor) as input. The `extract_keypoints_from_dwpose()` utility handles all output formats and auto-converts normalized coordinates (0-1 range from OpenposePreprocessor) to pixel coordinates.
+- **Use OpenposePreprocessor, NOT DWPreprocessor.** DWPose's YOLOX person detector fails on anime images. The regular OpenposePreprocessor detects 18/18 keypoints on anime characters. OpenposePreprocessor returns normalized (0-1) coordinates; PoseExtractor auto-denormalizes them to pixel coordinates using canvas dimensions.
+- **Portrait dimensions for full-body.** Z-Image character generation should use 768x1024 (portrait) to produce full-body characters. Square 1024x1024 produces bust crops.
+- **Robust LLM parsing.** `parse_llm_json()` in `utils/json_parser.py` handles direct JSON, markdown-wrapped responses, trailing commas, and embedded JSON extraction.
+- **Retry logic.** API client retries on timeout, connection errors, and rate limits (429/503) with exponential backoff.
+
+### LLM Infrastructure
+- **LiteLLM proxy**: `http://litellm.local/v1`, key `sk-litellm-e2e-test-master-key`
+- **llama.cpp**: `http://llama.local/v1` (via Traefik)
+- **Services managed by**: `~/Documents/programs/shared-docker-infra/` (Taskfile: `task up`)
+- **Available models**: qwen-35-9b, qwen-35-27-vision, gemma-4-26b, etc. (see LiteLLM config.yaml)
 
 ## Development
 
@@ -139,13 +183,50 @@ Standard COCO-18, 18 keypoints per person as flat array `[x, y, confidence, ...]
 ```
 comfyui-pose-director/
 ├── __init__.py              # Registers nodes with ComfyUI
+├── pyproject.toml           # Dependencies: openai>=1.0
 ├── nodes/
 │   ├── pose_manipulator.py  # Static pose manipulation via LLM
 │   ├── motion_director.py   # Keyframe generation via LLM
-│   └── pose_renderer.py     # OpenPose JSON → image rendering
+│   └── pose_renderer.py     # OpenPose JSON → color-coded skeleton image
 ├── utils/
-│   ├── openpose.py          # Keypoint names, bone pairs, body part groups
-│   └── api_client.py        # OpenAI-compatible API client (urllib)
-├── requirements.txt         # openai
+│   ├── openpose.py          # Keypoint names, bone pairs, body part groups, colors
+│   ├── api_client.py        # OpenAI-compatible API client with retry logic
+│   └── json_parser.py       # Robust JSON extraction from LLM responses
+├── ARCHITECTURE.md          # Full pipeline architecture and implementation plan
 └── CLAUDE.md
 ```
+
+### Impact Pack Batch Conversion
+The MotionDirector outputs a batch of skeleton images, but VNCCS_QWEN_Encoder processes one image at a time. Use Impact Pack nodes for conversion:
+- `ImpactImageBatchToImageList` — splits batch tensor into list of single images (`OUTPUT_IS_LIST = (True,)`)
+- `ImageListToImageBatch` — merges list back into batch
+- Located in: `comfyui-impact-pack/modules/impact/util_nodes.py`
+
+### VNCCS Reference Latent Pattern (Critical)
+Character consistency comes from the **reference latent** approach, NOT ControlNet:
+- VNCCS_QWEN_Encoder VAE-encodes both the character image and pose skeleton as reference latents
+- Injects at timestep zero via `reference_latents_method = "index_timestep_zero"`
+- Uses quadratic weighting: `(weight^2 * latent)` per image
+- Settings: `image1=character (weight 1.0)`, `image2=pose_skeleton (weight 1.0)`, `qwen_2511=True`
+- Credit: AHEKOT/MiuProject, https://github.com/AHEKOT/ComfyUI_VNCCS, MIT license
+
+## External Extensions (installed in ComfyUI)
+- `comfyui_controlnet_aux` — OpenPose extraction (use `OpenposePreprocessor`, NOT `DWPreprocessor` — DWPose fails on anime), returns `(IMAGE, POSE_KEYPOINT)`
+- `qweneditutils` — Qwen Image Edit nodes, takes CLIP + VAE + images + prompt
+- `ComfyUI-LTXVideo@nightly` — LTX Video 2.3 (**ENABLED**)
+- `comfyui-videohelpersuite` — Video combine/encode
+- `vnccs` / `vnccs-utils` — Visual Novel Character Creator Suite with QWEN encoder
+- `comfyui-impact-pack` — Batch/list conversion nodes (`ImpactImageBatchToImageList`)
+
+## LTX EditAnything IC-LoRA (Post-Processing)
+- **Model**: `ltx23_edit_anything_global_rank128_v1_9000steps_adamw.safetensors`
+- **Author**: Alissonerdx
+- **Source**: https://huggingface.co/Alissonerdx/LTX-LoRAs
+- **Load via**: `LTXICLoRALoaderModelOnly` node
+- **Prompt patterns**: "Add [X]", "Remove [X]", "Replace [X] with [Y]", "Convert [X] to [Y]"
+- **Purpose**: Fix video artifacts, add/remove scene elements, style adjustments
+- **Place in**: `shared-docker-infra/models/image-gen/comfyui/loras/`
+
+## Reference Extensions (cloned for study)
+- `/tmp/comfyui-openpose-studio/` — Visual pose editor, POSE_KEYPOINT patterns
+- `/tmp/comfyui-llm-party/` — LLM API integration patterns

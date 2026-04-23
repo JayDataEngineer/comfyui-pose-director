@@ -1,11 +1,11 @@
 """MotionDirector — Generates keyframe poses from a start pose + text using LLM."""
 
 import json
+
 import torch
-import numpy as np
 
 from ..utils.api_client import call_llm
-from ..utils.openpose import KEYPOINT_NAMES, BODY_PARTS
+from ..utils.json_parser import parse_llm_json, extract_keypoints_from_dwpose
 from .pose_renderer import PoseRendererNode
 
 
@@ -46,23 +46,33 @@ class MotionDirectorNode:
                 "motion_description": ("STRING", {"default": "Person waving hello", "multiline": True}),
                 "num_keyframes": ("INT", {"default": 4, "min": 2, "max": 16}),
                 "total_frames": ("INT", {"default": 48, "min": 8, "max": 240}),
-                "base_url": ("STRING", {"default": "http://localhost:11434/v1"}),
+                "base_url": ("STRING", {"default": "https://generativelanguage.googleapis.com/v1beta/openai/"}),
                 "api_key": ("STRING", {"default": ""}),
-                "model": ("STRING", {"default": "gemma3:12b"}),
+                "model": ("STRING", {"default": "models/gemini-2.5-flash"}),
                 "width": ("INT", {"default": 1024}),
                 "height": ("INT", {"default": 1024}),
+            },
+            "optional": {
+                "pose_keypoint": ("POSE_KEYPOINT",),
             }
         }
 
-    RETURN_TYPES = ("IMAGE", "STRING")
-    OUTPUT_NAMES = ("pose_batch", "keyframes_json")
+    RETURN_TYPES = ("IMAGE", "STRING", "POSE_KEYPOINT")
+    OUTPUT_NAMES = ("pose_batch", "keyframes_json", "pose_keypoints")
     FUNCTION = "generate"
     CATEGORY = "pose_director"
     DESCRIPTION = "Generate a sequence of keyframe poses from a start pose and motion description using an LLM."
 
     def generate(self, keypoints, motion_description, num_keyframes, total_frames,
-                 base_url, api_key, model, width, height):
-        kpts = json.loads(keypoints)
+                 base_url, api_key, model, width, height, pose_keypoint=None):
+        # If POSE_KEYPOINT provided, extract from it
+        if pose_keypoint is not None:
+            kpts, canvas_h, canvas_w = extract_keypoints_from_dwpose(pose_keypoint)
+            if canvas_h and canvas_w:
+                height = canvas_h
+                width = canvas_w
+        else:
+            kpts = json.loads(keypoints) if isinstance(keypoints, str) else keypoints
 
         # Calculate frame spacing for keyframes
         frame_interval = total_frames // (num_keyframes - 1) if num_keyframes > 1 else total_frames
@@ -85,15 +95,7 @@ Respond with ONLY the JSON keyframes object."""
 
         response = call_llm(base_url, api_key, model, SYSTEM_PROMPT, user_msg)
 
-        # Parse LLM response — extract JSON from possible markdown wrapping
-        response = response.strip()
-        if "```" in response:
-            response = response.split("```")[1]
-            if response.startswith("json"):
-                response = response[4:]
-            response = response.strip()
-
-        keyframes_data = json.loads(response)
+        keyframes_data = parse_llm_json(response)
         keyframes = keyframes_data["keyframes"]
         keyframes_json = json.dumps(keyframes_data)
 
@@ -102,12 +104,22 @@ Respond with ONLY the JSON keyframes object."""
         images = []
         for kf in keyframes:
             kf_kpts = kf["keypoints"]
-            # Wrap in the format PoseRenderer expects
-            kf_input = json.dumps([{"pose_keypoints_2d": kf_kpts}])
-            (img_tensor,) = renderer.render(kf_input, width, height, 4, 6)
+            render_input = json.dumps([{"pose_keypoints_2d": kf_kpts}])
+            (img_tensor,) = renderer.render(render_input, width, height, 4, 6)
             images.append(img_tensor)
 
         # Stack all images into a single batch tensor [N, H, W, 3]
         batch = torch.cat(images, dim=0)
 
-        return (batch, keyframes_json)
+        # Build POSE_KEYPOINT compatible output
+        pose_keypoint_out = [
+            {
+                "people": [{"pose_keypoints_2d": kf["keypoints"]}],
+                "canvas_height": height,
+                "canvas_width": width,
+                "frame": kf["frame"],
+            }
+            for kf in keyframes
+        ]
+
+        return (batch, keyframes_json, pose_keypoint_out)

@@ -1,14 +1,10 @@
 """PoseManipulator — Takes an OpenPose skeleton + text prompt, uses LLM to recalculate joint positions."""
 
 import json
-import torch
-import numpy as np
-from PIL import Image
 
 from ..utils.api_client import call_llm
-from ..utils.openpose import KEYPOINT_NAMES, BODY_PARTS
+from ..utils.json_parser import parse_llm_json, extract_keypoints_from_dwpose
 from .pose_renderer import PoseRendererNode
-
 
 SYSTEM_PROMPT = """You are a pose manipulation assistant. You receive OpenPose keypoint data for a person and a text instruction describing how to modify their pose.
 
@@ -35,22 +31,32 @@ class PoseManipulatorNode:
             "required": {
                 "keypoints": ("STRING", {"default": "[]", "multiline": True}),
                 "instruction": ("STRING", {"default": "Raise both arms above head", "multiline": True}),
-                "base_url": ("STRING", {"default": "http://localhost:11434/v1"}),
+                "base_url": ("STRING", {"default": "https://generativelanguage.googleapis.com/v1beta/openai/"}),
                 "api_key": ("STRING", {"default": ""}),
-                "model": ("STRING", {"default": "gemma3:12b"}),
+                "model": ("STRING", {"default": "models/gemini-2.5-flash"}),
                 "width": ("INT", {"default": 1024}),
                 "height": ("INT", {"default": 1024}),
+            },
+            "optional": {
+                "pose_keypoint": ("POSE_KEYPOINT",),
             }
         }
 
-    RETURN_TYPES = ("IMAGE", "STRING")
-    OUTPUT_NAMES = ("pose_image", "keypoints_json")
+    RETURN_TYPES = ("IMAGE", "STRING", "POSE_KEYPOINT")
+    OUTPUT_NAMES = ("pose_image", "keypoints_json", "pose_keypoint")
     FUNCTION = "manipulate"
     CATEGORY = "pose_director"
     DESCRIPTION = "Use an LLM to modify an OpenPose skeleton based on a text instruction."
 
-    def manipulate(self, keypoints, instruction, base_url, api_key, model, width, height):
-        kpts = json.loads(keypoints)
+    def manipulate(self, keypoints, instruction, base_url, api_key, model, width, height, pose_keypoint=None):
+        # If POSE_KEYPOINT provided, extract from it (takes priority over STRING input)
+        if pose_keypoint is not None:
+            kpts, canvas_h, canvas_w = extract_keypoints_from_dwpose(pose_keypoint)
+            if canvas_h and canvas_w:
+                height = canvas_h
+                width = canvas_w
+        else:
+            kpts = json.loads(keypoints) if isinstance(keypoints, str) else keypoints
 
         user_msg = f"""Here are the current keypoints (flat array, [x, y, confidence] per point):
 {json.dumps(kpts)}
@@ -63,19 +69,19 @@ Respond with ONLY the modified keypoints array."""
 
         response = call_llm(base_url, api_key, model, SYSTEM_PROMPT, user_msg)
 
-        # Parse the LLM response — extract JSON from possible markdown wrapping
-        response = response.strip()
-        if "```" in response:
-            response = response.split("```")[1]
-            if response.startswith("json"):
-                response = response[4:]
-            response = response.strip()
-
-        new_kpts = json.loads(response)
+        new_kpts = parse_llm_json(response)
         new_kpts_json = json.dumps(new_kpts)
+
+        # Build POSE_KEYPOINT compatible output for downstream ControlNet nodes
+        pose_keypoint_out = {
+            "people": [{"pose_keypoints_2d": new_kpts}],
+            "canvas_height": height,
+            "canvas_width": width,
+        }
 
         # Render the skeleton image
         renderer = PoseRendererNode()
-        (img_tensor,) = renderer.render(new_kpts_json, width, height, 4, 6)
+        render_input = json.dumps([{"pose_keypoints_2d": new_kpts}])
+        (img_tensor,) = renderer.render(render_input, width, height, 4, 6)
 
-        return (img_tensor, new_kpts_json)
+        return (img_tensor, new_kpts_json, pose_keypoint_out)

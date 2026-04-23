@@ -1,0 +1,94 @@
+{
+  "last_node_id": 8,
+  "last_link_id": 6,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [0, 0],
+      "size": [315, 314],
+      "widgets_values": ["PoseDirector/character_00001_.png", "image"],
+      "_comment": "Base character image — the face will be animated with lip sync"
+    },
+    {
+      "id": 2,
+      "type": "LoadAudio",
+      "pos": [0, 400],
+      "size": [315, 100],
+      "widgets_values": ["voice.wav"],
+      "_comment": "Voice recording for lip sync"
+    },
+    {
+      "id": 3,
+      "type": "LoadAudioToText",
+      "pos": [0, 550],
+      "size": [315, 80],
+      "widgets_values": ["transcribe the speech"],
+      "_comment": "Optional: transcribe audio to text for subtitle generation"
+    },
+    {
+      "id": 4,
+      "type": "WanImageToVideo",
+      "pos": [400, 0],
+      "size": [400, 400],
+      "widgets_values": ["Wan2_1-I2V-14B-480P", 480, 480, 8, 42],
+      "_comment": "InfiniteTalk I2V model. Takes image + audio → lip-synced video."
+    },
+    {
+      "id": 5,
+      "type": "CLIPVisionLoader",
+      "pos": [400, 450],
+      "size": [315, 80],
+      "widgets_values": ["clip_vision_h.safetensors"],
+      "_comment": "CLIP Vision encoder for Wan I2V"
+    },
+    {
+      "id": 6,
+      "type": "WanAudioEncoder",
+      "pos": [400, 570],
+      "size": [315, 80],
+      "widgets_values": ["chinese-wav2vec2-base"],
+      "_comment": "Audio encoder — extracts lip sync features from voice audio"
+    },
+    {
+      "id": 7,
+      "type": "VAEDecode",
+      "pos": [900, 0],
+      "size": [210, 80]
+    },
+    {
+      "id": 8,
+      "type": "VHS_VideoCombine",
+      "pos": [1200, 0],
+      "size": [315, 200],
+      "widgets_values": [16, 0, "PoseDirector/lipsync", "video/h264-mp4", false, true],
+      "_comment": "VideoHelperSuite combine — outputs MP4 at 16fps"
+    }
+  ],
+  "links": [
+    [1, 1, 0, 4, 0, "IMAGE"],
+    [2, 2, 0, 6, 0, "AUDIO"],
+    [3, 6, 0, 4, 1, "AUDIO_EMBEDS"],
+    [4, 5, 0, 4, 2, "CLIP_VISION"],
+    [5, 4, 0, 7, 0, "LATENT"],
+    [6, 7, 0, 8, 0, "IMAGE"]
+  ],
+  "config": {},
+  "extra": {
+    "_setup_required": {
+      "extension": "ComfyUI-WanVideoWrapper by Kijai",
+      "github": "https://github.com/kijai/ComfyUI-WanVideoWrapper",
+      "install": "cd ~/Documents/programs/img/comfyui/custom_nodes && git clone https://github.com/kijai/ComfyUI-WanVideoWrapper.git",
+      "models_needed": [
+        "Wan2_1-I2V-14B-480P (diffusion model — place in diffusion_models/ or unet/)",
+        "chinese-wav2vec2-base (audio encoder — downloads automatically or place in models/)",
+        "clip_vision_h.safetensors (CLIP vision — place in clip_vision/)",
+        "MeiGen-InfiniteTalk audio condition weights (place in models/)"
+      ]
+    },
+    "_reference": "InfiniteTalk by MeiGen-AI: https://github.com/MeiGen-AI/InfiniteTalk",
+    "_note": "This workflow is a TEMPLATE — node names and wiring will need adjustment once WanVideoWrapper is installed. InfiniteTalk is the best lip sync option for ComfyUI (beats LatentSync, Sonic, MuseTalk). Works on 24GB VRAM with FP8. ~45 seconds per second of output on RTX 4090.",
+    "_vram": "InfiniteTalk needs ~20GB VRAM. Run this as a SEPARATE pass from LTX Video generation. Offload LTX models first."
+  },
+  "version": 0.4
+}

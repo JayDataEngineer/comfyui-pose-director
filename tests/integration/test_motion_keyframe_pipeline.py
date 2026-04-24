@@ -12,6 +12,7 @@ first keyframe for the VNCCS QWEN Encoder.
 import pytest
 
 from conftest import submit_workflow, get_output_images
+from pipeline.workflows import build_vnccs_edit_nodes
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.requires_api_key]
@@ -51,56 +52,26 @@ def motion_keyframe_result(comfyui, character_image, llm_config):
 
         # Split batch into individual images
         "5": {"class_type": "ImpactImageBatchToImageList", "inputs": {"image": ["3", 0]}},
-
-        # Load Qwen Image Edit models
-        "6": {"class_type": "CheckpointLoaderSimple", "inputs": {
-            "ckpt_name": "qwen_image_edit_2511_fp8_e4m3fn_scaled_lightning_comfyui.safetensors",
-        }},
-        "7": {"class_type": "CLIPLoader", "inputs": {
-            "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
-            "type": "qwen_image",
-        }},
-        "8": {"class_type": "VAELoader", "inputs": {"vae_name": "qwen_image_vae.safetensors"}},
-
-        # VNCCS QWEN Encoder for keyframe 0
-        "9": {"class_type": "VNCCS_QWEN_Encoder", "inputs": {
-            "prompt": "Draw character from image2",
-            "latent_image_index": 1,
-            "image3": None,
-            "image1_name": "Character Reference",
-            "image2_name": "Pose Guide",
-            "image3_name": "Picture 3",
-            "target_size": 512,
-            "upscale_method": "lanczos",
-            "crop_method": "center",
-            "weight1": 1.0,
-            "weight2": 1.0,
-            "weight3": 1.0,
-            "vl_size": 384,
-            "instruction": "Modify the character's pose to match the skeleton guide shown in Picture 2. Maintain the character's exact appearance, clothing, and identity.",
-            "qwen_2511": True,
-            "clip": ["7", 0],
-            "vae": ["8", 0],
-            "image1": ["1", 0],
-            "image2": ["5", 0],
-        }},
-
-        # KSampler for keyframe 0
-        "10": {"class_type": "KSampler", "inputs": {
-            "seed": 42, "steps": 40, "cfg": 1.0,
-            "sampler_name": "euler", "scheduler": "simple",
-            "denoise": 1.0,
-            "model": ["6", 0],
-            "positive": ["9", 0], "negative": ["9", 1],
-            "latent_image": ["9", 2],
-        }},
-
-        # Decode keyframe 0
-        "11": {"class_type": "VAEDecode", "inputs": {"samples": ["10", 0], "vae": ["8", 0]}},
-
-        # Save keyframe 0
-        "12": {"class_type": "SaveImage", "inputs": {"filename_prefix": "pytest/mkf_keyframe_0", "images": ["11", 0]}},
     }
+
+    # VNCCS encoder + sampler + decode + save (nodes 6-12)
+    vnccs_nodes = build_vnccs_edit_nodes(
+        model_node_id="6",
+        clip_node_id="7",
+        vae_node_id="8",
+        encoder_node_id="9",
+        ksampler_node_id="10",
+        decode_node_id="11",
+        save_node_id="12",
+        image1_ref=("1", 0),   # character image
+        image2_ref=("5", 0),   # first keyframe from batch split
+        seed=42,
+        steps=40,
+        target_size=512,
+        filename_prefix="pytest/mkf_keyframe_0",
+        use_gguf_unet=False,
+    )
+    workflow.update(vnccs_nodes)
     return submit_workflow(workflow, timeout=600, retries=2)
 
 

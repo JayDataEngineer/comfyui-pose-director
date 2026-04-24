@@ -6,6 +6,7 @@ Pipeline: LoadImage -> OpenposePreprocessor -> PoseManipulator -> VNCCS_QWEN_Enc
 import pytest
 
 from conftest import submit_workflow, get_output_images
+from pipeline.workflows import build_vnccs_edit_nodes
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.requires_api_key]
@@ -40,56 +41,26 @@ def static_pose_result(comfyui, character_image, llm_config):
 
         # Preview the skeleton
         "20": {"class_type": "PreviewImage", "inputs": {"filename_prefix": "pytest/static_skeleton", "images": ["3", 0]}},
-
-        # Load Qwen Image Edit models
-        "4": {"class_type": "CheckpointLoaderSimple", "inputs": {
-            "ckpt_name": "qwen_image_edit_2511_fp8_e4m3fn_scaled_lightning_comfyui.safetensors",
-        }},
-        "5": {"class_type": "CLIPLoader", "inputs": {
-            "clip_name": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
-            "type": "qwen_image",
-        }},
-        "6": {"class_type": "VAELoader", "inputs": {"vae_name": "qwen_image_vae.safetensors"}},
-
-        # VNCCS QWEN Encoder -- character + skeleton -> edited image
-        "7": {"class_type": "VNCCS_QWEN_Encoder", "inputs": {
-            "prompt": "Draw character from image2",
-            "latent_image_index": 1,
-            "image3": None,
-            "image1_name": "Character Reference",
-            "image2_name": "Pose Guide",
-            "image3_name": "Picture 3",
-            "target_size": 1024,
-            "upscale_method": "lanczos",
-            "crop_method": "center",
-            "weight1": 1.0,
-            "weight2": 1.0,
-            "weight3": 1.0,
-            "vl_size": 384,
-            "instruction": "Modify the character's pose to match the skeleton guide shown in Picture 2. Maintain the character's exact appearance, clothing, and identity.",
-            "qwen_2511": True,
-            "clip": ["5", 0],
-            "vae": ["6", 0],
-            "image1": ["1", 0],   # character image
-            "image2": ["3", 0],   # skeleton image
-        }},
-
-        # Sample
-        "8": {"class_type": "KSampler", "inputs": {
-            "seed": 42, "steps": 40, "cfg": 1.0,
-            "sampler_name": "euler", "scheduler": "simple",
-            "denoise": 1.0,
-            "model": ["4", 0],
-            "positive": ["7", 0], "negative": ["7", 1],
-            "latent_image": ["7", 2],
-        }},
-
-        # Decode
-        "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["6", 0]}},
-
-        # Save
-        "10": {"class_type": "SaveImage", "inputs": {"filename_prefix": "pytest/static_edited", "images": ["9", 0]}},
     }
+
+    # VNCCS encoder + sampler + decode + save (nodes 4-10)
+    vnccs_nodes = build_vnccs_edit_nodes(
+        model_node_id="4",
+        clip_node_id="5",
+        vae_node_id="6",
+        encoder_node_id="7",
+        ksampler_node_id="8",
+        decode_node_id="9",
+        save_node_id="10",
+        image1_ref=("1", 0),   # character image
+        image2_ref=("3", 0),   # skeleton image from PoseManipulator
+        seed=42,
+        steps=40,
+        target_size=1024,
+        filename_prefix="pytest/static_edited",
+        use_gguf_unet=False,
+    )
+    workflow.update(vnccs_nodes)
     return submit_workflow(workflow, timeout=600, retries=2)
 
 

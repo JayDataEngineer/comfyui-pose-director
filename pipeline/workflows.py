@@ -142,27 +142,91 @@ def build_vnccs_edit_workflow(
         "21": {"class_type": "LoadImage", "inputs": {"image": keyframe_image_path}},
     }
 
+    # Add VNCCS encoder + sampler + decode + save nodes
+    vnccs_nodes = build_vnccs_edit_nodes(
+        image1_ref=("1", 0),
+        image2_ref=("21", 0),
+        seed=seed,
+        steps=steps,
+        target_size=target_size,
+        vl_size=vl_size,
+        prompt=prompt,
+        instruction=instruction,
+        filename_prefix=filename_prefix,
+        use_gguf_unet=use_gguf_unet,
+        unet_name=unet_name,
+        ckpt_name=ckpt_name,
+        clip_name=clip_name,
+        vae_name=vae_name,
+    )
+    workflow.update(vnccs_nodes)
+
+    return workflow
+
+
+def build_vnccs_edit_nodes(
+    model_node_id: str = "4",
+    clip_node_id: str = "5",
+    vae_node_id: str = "6",
+    encoder_node_id: str = "7",
+    ksampler_node_id: str = "8",
+    decode_node_id: str = "9",
+    save_node_id: str = "10",
+    image1_ref: tuple = ("1", 0),
+    image2_ref: tuple = ("21", 0),
+    seed: int = 42,
+    steps: int = 40,
+    target_size: int = 1024,
+    vl_size: int = 384,
+    prompt: str = VNCCS_PROMPT,
+    instruction: str = VNCCS_INSTRUCTION,
+    filename_prefix: str = "pipeline/edited_kf",
+    use_gguf_unet: bool = True,
+    unet_name: str = "Qwen-Image-Edit-2511-Q5_0.gguf",
+    ckpt_name: str = "qwen_image_edit_2511_fp8_e4m3fn_scaled_lightning_comfyui.safetensors",
+    clip_name: str = "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+    vae_name: str = "qwen_image_vae.safetensors",
+) -> dict:
+    """Build just the VNCCS encoder + sampler + decode + save nodes.
+
+    Returns a dict of node_id -> node_def suitable for merging into a larger
+    workflow. The caller is responsible for providing model loaders and
+    LoadImage nodes, then referencing them via image1_ref/image2_ref.
+
+    Args:
+        model_node_id: ID for the UNET/Checkpoint loader node.
+        clip_node_id: ID for the CLIP loader node.
+        vae_node_id: ID for the VAE loader node.
+        encoder_node_id: ID for the VNCCS_QWEN_Encoder node.
+        ksampler_node_id: ID for the KSampler node.
+        decode_node_id: ID for the VAEDecode node.
+        save_node_id: ID for the SaveImage node.
+        image1_ref: (source_node_id, output_index) for character image.
+        image2_ref: (source_node_id, output_index) for pose/skeleton image.
+    """
+    nodes = {}
+
     if use_gguf_unet:
-        workflow["4"] = {
+        nodes[model_node_id] = {
             "class_type": "UnetLoaderGGUF",
             "inputs": {"unet_name": unet_name},
         }
     else:
-        workflow["4"] = {
+        nodes[model_node_id] = {
             "class_type": "CheckpointLoaderSimple",
             "inputs": {"ckpt_name": ckpt_name},
         }
 
-    workflow["5"] = {
+    nodes[clip_node_id] = {
         "class_type": "CLIPLoader",
         "inputs": {"clip_name": clip_name, "type": "qwen_image"},
     }
-    workflow["6"] = {
+    nodes[vae_node_id] = {
         "class_type": "VAELoader",
         "inputs": {"vae_name": vae_name},
     }
 
-    workflow["7"] = {
+    nodes[encoder_node_id] = {
         "class_type": "VNCCS_QWEN_Encoder",
         "inputs": {
             "prompt": prompt,
@@ -180,14 +244,14 @@ def build_vnccs_edit_workflow(
             "vl_size": vl_size,
             "instruction": instruction,
             "qwen_2511": True,
-            "clip": ["5", 0],
-            "vae": ["6", 0],
-            "image1": ["1", 0],
-            "image2": ["21", 0],
+            "clip": [clip_node_id, 0],
+            "vae": [vae_node_id, 0],
+            "image1": list(image1_ref),
+            "image2": list(image2_ref),
         },
     }
 
-    workflow["8"] = {
+    nodes[ksampler_node_id] = {
         "class_type": "KSampler",
         "inputs": {
             "seed": seed,
@@ -196,24 +260,24 @@ def build_vnccs_edit_workflow(
             "sampler_name": "euler",
             "scheduler": "simple",
             "denoise": 1.0,
-            "model": ["4", 0],
-            "positive": ["7", 0],
-            "negative": ["7", 1],
-            "latent_image": ["7", 2],
+            "model": [model_node_id, 0],
+            "positive": [encoder_node_id, 0],
+            "negative": [encoder_node_id, 1],
+            "latent_image": [encoder_node_id, 2],
         },
     }
 
-    workflow["9"] = {
+    nodes[decode_node_id] = {
         "class_type": "VAEDecode",
-        "inputs": {"samples": ["8", 0], "vae": ["6", 0]},
+        "inputs": {"samples": [ksampler_node_id, 0], "vae": [vae_node_id, 0]},
     }
 
-    workflow["10"] = {
+    nodes[save_node_id] = {
         "class_type": "SaveImage",
-        "inputs": {"filename_prefix": filename_prefix, "images": ["9", 0]},
+        "inputs": {"filename_prefix": filename_prefix, "images": [decode_node_id, 0]},
     }
 
-    return workflow
+    return nodes
 
 
 def build_ltx_video_workflow(

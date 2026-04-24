@@ -5,94 +5,589 @@
     {
       "id": 1,
       "type": "LoadImage",
-      "pos": [0, 0],
-      "size": [315, 314],
-      "widgets_values": ["PoseDirector/keyframe_0_00001_.png", "image"],
-      "_comment": "Load a generated keyframe image to edit"
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        315,
+        314
+      ],
+      "widgets_values": [
+        "PoseDirector/keyframe_0_00001_.png",
+        "image"
+      ],
+      "_comment": "Load a generated keyframe image to edit",
+      "inputs": [
+        {
+          "name": "image",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            7
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ]
     },
     {
       "id": 2,
       "type": "UnetLoaderGGUF",
-      "pos": [0, 400],
-      "size": [315, 100],
-      "widgets_values": ["ltx-2.3-22b-distilled-1.1-UD-Q4_K_M.gguf"],
-      "_comment": "LTX 2.3 Distilled 1.1 GGUF"
+      "pos": [
+        0,
+        400
+      ],
+      "size": [
+        315,
+        100
+      ],
+      "widgets_values": [
+        "ltx-2.3-22b-distilled-1.1-UD-Q4_K_M.gguf"
+      ],
+      "_comment": "LTX 2.3 Distilled 1.1 GGUF",
+      "inputs": [
+        {
+          "name": "unet_name",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            1
+          ]
+        }
+      ]
     },
     {
       "id": 3,
       "type": "LTXICLoRALoaderModelOnly",
-      "pos": [400, 400],
-      "size": [315, 100],
-      "widgets_values": ["ltx23_edit_anything_global_rank128_v1_9000steps_adamw.safetensors", 1.0],
-      "_comment": "Loads EditAnything IC-LoRA. Output includes latent_downscale_factor from LoRA metadata."
+      "pos": [
+        400,
+        400
+      ],
+      "size": [
+        315,
+        100
+      ],
+      "widgets_values": [
+        "ltx23_edit_anything_global_rank128_v1_9000steps_adamw.safetensors",
+        1.0
+      ],
+      "_comment": "Loads EditAnything IC-LoRA. Output includes latent_downscale_factor from LoRA metadata.",
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 1
+        },
+        {
+          "name": "lora_name",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "strength_model",
+          "type": "FLOAT",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "model",
+          "links": [
+            11
+          ]
+        },
+        {
+          "name": "latent_downscale_factor",
+          "type": "latent_downscale_factor",
+          "links": []
+        }
+      ]
     },
     {
       "id": 4,
       "type": "LTXVGemmaCLIPModelLoader",
-      "pos": [0, 550],
-      "size": [350, 100],
-      "widgets_values": ["gemma-3-12b-it/model.safetensors", "ltx-2.3_text_projection_bf16.safetensors", 256],
-      "_comment": "Gemma 3 12B text encoder + LTXV connector"
+      "pos": [
+        0,
+        550
+      ],
+      "size": [
+        350,
+        100
+      ],
+      "widgets_values": [
+        "gemma-3-12b-it/model.safetensors",
+        "ltx-2.3_text_projection_bf16.safetensors",
+        256
+      ],
+      "_comment": "Gemma 3 12B text encoder + LTXV connector",
+      "inputs": [
+        {
+          "name": "gemma_path",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "ltxv_path",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "max_length",
+          "type": "INT",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "clip",
+          "type": "clip",
+          "links": [
+            2
+          ]
+        }
+      ]
     },
     {
       "id": 5,
       "type": "CLIPTextEncode",
-      "pos": [400, 550],
-      "size": [400, 150],
-      "widgets_values": ["Remove visual artifacts. Fix the character's hands. Clean up the background."],
-      "_comment": "Edit instruction. Change prompt for different edits: Add/Remove/Replace/Convert"
+      "pos": [
+        400,
+        550
+      ],
+      "size": [
+        400,
+        150
+      ],
+      "widgets_values": [
+        "Remove visual artifacts. Fix the character's hands. Clean up the background."
+      ],
+      "_comment": "Edit instruction. Change prompt for different edits: Add/Remove/Replace/Convert",
+      "inputs": [
+        {
+          "name": "text",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            3,
+            4
+          ]
+        }
+      ]
     },
     {
       "id": 6,
       "type": "VAELoader",
-      "pos": [0, 670],
-      "size": [315, 60],
-      "widgets_values": ["taeltx2_3.safetensors"],
-      "_comment": "TAEHV tiny VAE for LTX 2.3"
+      "pos": [
+        0,
+        670
+      ],
+      "size": [
+        315,
+        60
+      ],
+      "widgets_values": [
+        "taeltx2_3.safetensors"
+      ],
+      "_comment": "TAEHV tiny VAE for LTX 2.3",
+      "inputs": [
+        {
+          "name": "vae_name",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            5
+          ]
+        }
+      ]
     },
     {
       "id": 7,
       "type": "EmptyLTXVLatentVideo",
-      "pos": [0, 200],
-      "size": [315, 120],
-      "widgets_values": [512, 512, 9, 1],
-      "_comment": "512x512, 9 frames (single image edit), batch 1"
+      "pos": [
+        0,
+        200
+      ],
+      "size": [
+        315,
+        120
+      ],
+      "widgets_values": [
+        512,
+        512,
+        9,
+        1
+      ],
+      "_comment": "512x512, 9 frames (single image edit), batch 1",
+      "inputs": [
+        {
+          "name": "width",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "length",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "batch_size",
+          "type": "INT",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            6
+          ]
+        }
+      ]
     },
     {
       "id": 8,
       "type": "LTXAddVideoICLoRAGuide",
-      "pos": [800, 300],
-      "size": [350, 300],
-      "widgets_values": [0, 1.0, 1.0, "disabled", false, 256, 64],
-      "_comment": "Adds the reference image at frame 0 with EditAnything IC-LoRA conditioning"
+      "pos": [
+        800,
+        300
+      ],
+      "size": [
+        350,
+        300
+      ],
+      "widgets_values": [
+        0,
+        1.0,
+        1.0,
+        "disabled",
+        false,
+        256,
+        64
+      ],
+      "_comment": "Adds the reference image at frame 0 with EditAnything IC-LoRA conditioning",
+      "inputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 3
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 4
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 5
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "link": 6
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 7
+        },
+        {
+          "name": "frame_idx",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "strength",
+          "type": "FLOAT",
+          "link": null
+        },
+        {
+          "name": "latent_downscale_factor",
+          "type": "FLOAT",
+          "link": null
+        },
+        {
+          "name": "crop",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "use_tiled_encode",
+          "type": "BOOLEAN",
+          "link": null
+        },
+        {
+          "name": "tile_size",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "tile_overlap",
+          "type": "INT",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "positive",
+          "links": [
+            8
+          ]
+        },
+        {
+          "name": "negative",
+          "type": "negative",
+          "links": [
+            9
+          ]
+        },
+        {
+          "name": "latent",
+          "type": "latent",
+          "links": [
+            10
+          ]
+        }
+      ]
     },
     {
       "id": 9,
       "type": "KSampler",
-      "pos": [1250, 300],
-      "size": [315, 260],
-      "widgets_values": [42, "fixed", 30, 1.0, "euler", "simple"]
+      "pos": [
+        1250,
+        300
+      ],
+      "size": [
+        315,
+        260
+      ],
+      "widgets_values": [
+        42,
+        "fixed",
+        30,
+        1.0,
+        "euler",
+        "simple"
+      ],
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 11
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "steps",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "cfg",
+          "type": "FLOAT",
+          "link": null
+        },
+        {
+          "name": "sampler_name",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "scheduler",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 8
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 9
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 10
+        },
+        {
+          "name": "denoise",
+          "type": "FLOAT",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": []
+        }
+      ]
     },
     {
       "id": 10,
       "type": "SaveImage",
-      "pos": [1650, 300],
-      "size": [315, 270],
-      "widgets_values": ["PoseDirector/edit_anything"]
+      "pos": [
+        1650,
+        300
+      ],
+      "size": [
+        315,
+        270
+      ],
+      "widgets_values": [
+        "PoseDirector/edit_anything"
+      ],
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "filename_prefix",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": []
     }
   ],
   "links": [
-    [1, 2, 0, 3, 0, "MODEL"],
-    [2, 4, 0, 5, 0, "CLIP"],
-    [3, 5, 0, 8, 0, "CONDITIONING"],
-    [4, 5, 0, 8, 1, "CONDITIONING"],
-    [5, 6, 0, 8, 2, "VAE"],
-    [6, 7, 0, 8, 3, "LATENT"],
-    [7, 1, 0, 8, 4, "IMAGE"],
-    [8, 8, 0, 9, 1, "CONDITIONING"],
-    [9, 8, 1, 9, 2, "CONDITIONING"],
-    [10, 8, 2, 9, 3, "LATENT"],
-    [11, 3, 0, 9, 0, "MODEL"]
+    [
+      1,
+      2,
+      0,
+      3,
+      0,
+      "MODEL"
+    ],
+    [
+      2,
+      4,
+      0,
+      5,
+      0,
+      "CLIP"
+    ],
+    [
+      3,
+      5,
+      0,
+      8,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      4,
+      5,
+      0,
+      8,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      5,
+      6,
+      0,
+      8,
+      2,
+      "VAE"
+    ],
+    [
+      6,
+      7,
+      0,
+      8,
+      3,
+      "LATENT"
+    ],
+    [
+      7,
+      1,
+      0,
+      8,
+      4,
+      "IMAGE"
+    ],
+    [
+      8,
+      8,
+      0,
+      9,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      9,
+      8,
+      1,
+      9,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      10,
+      8,
+      2,
+      9,
+      3,
+      "LATENT"
+    ],
+    [
+      11,
+      3,
+      0,
+      9,
+      0,
+      "MODEL"
+    ]
   ],
   "config": {},
   "extra": {

@@ -63,29 +63,26 @@ def motion_keyframe_result(comfyui, character_image, llm_config):
         "8": {"class_type": "VAELoader", "inputs": {"vae_name": "qwen_image_vae.safetensors"}},
 
         # VNCCS QWEN Encoder for keyframe 0
-        # ImpactImageBatchToImageList outputs a list; index 0 gives the first image
         "9": {"class_type": "VNCCS_QWEN_Encoder", "inputs": {
-            "instruction": "Modify the character pose to match the skeleton guide.",
-            "seed": 1,
-            "image2": None,
+            "prompt": "Draw character from image2",
+            "latent_image_index": 1,
             "image3": None,
-            "reference_image_list": None,
-            "image1_label": "Character Reference",
-            "image2_label": "Pose Guide",
-            "image3_label": "Picture 3",
-            "resolution": 512,
-            "resize_method": "lanczos",
-            "crop": "center",
-            "image1_weight": 1.0,
-            "image2_weight": 1.0,
-            "image3_weight": 1.0,
-            "start_step": 384,
-            "prompt": "Modify the character pose to match the skeleton guide.",
+            "image1_name": "Character Reference",
+            "image2_name": "Pose Guide",
+            "image3_name": "Picture 3",
+            "target_size": 512,
+            "upscale_method": "lanczos",
+            "crop_method": "center",
+            "weight1": 1.0,
+            "weight2": 1.0,
+            "weight3": 1.0,
+            "vl_size": 384,
+            "instruction": "Modify the character's pose to match the skeleton guide shown in Picture 2. Maintain the character's exact appearance, clothing, and identity.",
             "qwen_2511": True,
             "clip": ["7", 0],
             "vae": ["8", 0],
             "image1": ["1", 0],
-            "image2": ["5", 0],  # First skeleton from list output
+            "image2": ["5", 0],
         }},
 
         # KSampler for keyframe 0

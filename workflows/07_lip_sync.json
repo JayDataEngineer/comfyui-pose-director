@@ -5,73 +5,398 @@
     {
       "id": 1,
       "type": "LoadImage",
-      "pos": [0, 0],
-      "size": [315, 314],
-      "widgets_values": ["PoseDirector/character_00001_.png", "image"],
-      "_comment": "Base character image — the face will be animated with lip sync"
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        315,
+        314
+      ],
+      "widgets_values": [
+        "PoseDirector/character_00001_.png",
+        "image"
+      ],
+      "_comment": "Base character image \u2014 the face will be animated with lip sync",
+      "inputs": [
+        {
+          "name": "image",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            1
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ]
     },
     {
       "id": 2,
       "type": "LoadAudio",
-      "pos": [0, 400],
-      "size": [315, 100],
-      "widgets_values": ["voice.wav"],
-      "_comment": "Voice recording for lip sync"
+      "pos": [
+        0,
+        400
+      ],
+      "size": [
+        315,
+        100
+      ],
+      "widgets_values": [
+        "voice.wav"
+      ],
+      "_comment": "Voice recording for lip sync",
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "AUDIO",
+          "type": "AUDIO",
+          "links": [
+            2
+          ]
+        }
+      ]
     },
     {
       "id": 3,
       "type": "LoadAudioToText",
-      "pos": [0, 550],
-      "size": [315, 80],
-      "widgets_values": ["transcribe the speech"],
-      "_comment": "Optional: transcribe audio to text for subtitle generation"
+      "pos": [
+        0,
+        550
+      ],
+      "size": [
+        315,
+        80
+      ],
+      "widgets_values": [
+        "transcribe the speech"
+      ],
+      "_comment": "Optional: transcribe audio to text for subtitle generation",
+      "inputs": [],
+      "outputs": []
     },
     {
       "id": 4,
       "type": "WanImageToVideo",
-      "pos": [400, 0],
-      "size": [400, 400],
-      "widgets_values": ["Wan2_1-I2V-14B-480P", 480, 480, 8, 42],
-      "_comment": "InfiniteTalk I2V model. Takes image + audio → lip-synced video."
+      "pos": [
+        400,
+        0
+      ],
+      "size": [
+        400,
+        400
+      ],
+      "widgets_values": [
+        "Wan2_1-I2V-14B-480P",
+        480,
+        480,
+        8,
+        42
+      ],
+      "_comment": "InfiniteTalk I2V model. Takes image + audio \u2192 lip-synced video.",
+      "inputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 1
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 3
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 4
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "length",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "batch_size",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "clip_vision_output",
+          "type": "CLIP_VISION_OUTPUT",
+          "link": null
+        },
+        {
+          "name": "start_image",
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "positive",
+          "links": [
+            5
+          ]
+        },
+        {
+          "name": "negative",
+          "type": "negative",
+          "links": []
+        },
+        {
+          "name": "latent",
+          "type": "latent",
+          "links": []
+        }
+      ]
     },
     {
       "id": 5,
       "type": "CLIPVisionLoader",
-      "pos": [400, 450],
-      "size": [315, 80],
-      "widgets_values": ["clip_vision_h.safetensors"],
-      "_comment": "CLIP Vision encoder for Wan I2V"
+      "pos": [
+        400,
+        450
+      ],
+      "size": [
+        315,
+        80
+      ],
+      "widgets_values": [
+        "clip_vision_h.safetensors"
+      ],
+      "_comment": "CLIP Vision encoder for Wan I2V",
+      "inputs": [
+        {
+          "name": "clip_name",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CLIP_VISION",
+          "type": "CLIP_VISION",
+          "links": [
+            4
+          ]
+        }
+      ]
     },
     {
       "id": 6,
       "type": "WanAudioEncoder",
-      "pos": [400, 570],
-      "size": [315, 80],
-      "widgets_values": ["chinese-wav2vec2-base"],
-      "_comment": "Audio encoder — extracts lip sync features from voice audio"
+      "pos": [
+        400,
+        570
+      ],
+      "size": [
+        315,
+        80
+      ],
+      "widgets_values": [
+        "chinese-wav2vec2-base"
+      ],
+      "_comment": "Audio encoder \u2014 extracts lip sync features from voice audio",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "output_0",
+          "type": "AUDIO_EMBEDS",
+          "links": [
+            3
+          ]
+        }
+      ]
     },
     {
       "id": 7,
       "type": "VAEDecode",
-      "pos": [900, 0],
-      "size": [210, 80]
+      "pos": [
+        900,
+        0
+      ],
+      "size": [
+        210,
+        80
+      ],
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 5
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            6
+          ]
+        }
+      ]
     },
     {
       "id": 8,
       "type": "VHS_VideoCombine",
-      "pos": [1200, 0],
-      "size": [315, 200],
-      "widgets_values": [16, 0, "PoseDirector/lipsync", "video/h264-mp4", false, true],
-      "_comment": "VideoHelperSuite combine — outputs MP4 at 16fps"
+      "pos": [
+        1200,
+        0
+      ],
+      "size": [
+        315,
+        200
+      ],
+      "widgets_values": [
+        16,
+        0,
+        "PoseDirector/lipsync",
+        "video/h264-mp4",
+        false,
+        true
+      ],
+      "_comment": "VideoHelperSuite combine \u2014 outputs MP4 at 16fps",
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 6
+        },
+        {
+          "name": "frame_rate",
+          "type": "FLOAT",
+          "link": null
+        },
+        {
+          "name": "loop_count",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "filename_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "format",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "pingpong",
+          "type": "BOOLEAN",
+          "link": null
+        },
+        {
+          "name": "save_output",
+          "type": "BOOLEAN",
+          "link": null
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": null
+        },
+        {
+          "name": "meta_batch",
+          "type": "VHS_BATCHMANAGER",
+          "link": null
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Filenames",
+          "type": "Filenames",
+          "links": []
+        }
+      ]
     }
   ],
   "links": [
-    [1, 1, 0, 4, 0, "IMAGE"],
-    [2, 2, 0, 6, 0, "AUDIO"],
-    [3, 6, 0, 4, 1, "AUDIO_EMBEDS"],
-    [4, 5, 0, 4, 2, "CLIP_VISION"],
-    [5, 4, 0, 7, 0, "LATENT"],
-    [6, 7, 0, 8, 0, "IMAGE"]
+    [
+      1,
+      1,
+      0,
+      4,
+      0,
+      "IMAGE"
+    ],
+    [
+      2,
+      2,
+      0,
+      6,
+      0,
+      "AUDIO"
+    ],
+    [
+      3,
+      6,
+      0,
+      4,
+      1,
+      "AUDIO_EMBEDS"
+    ],
+    [
+      4,
+      5,
+      0,
+      4,
+      2,
+      "CLIP_VISION"
+    ],
+    [
+      5,
+      4,
+      0,
+      7,
+      0,
+      "LATENT"
+    ],
+    [
+      6,
+      7,
+      0,
+      8,
+      0,
+      "IMAGE"
+    ]
   ],
   "config": {},
   "extra": {
@@ -80,14 +405,14 @@
       "github": "https://github.com/kijai/ComfyUI-WanVideoWrapper",
       "install": "cd ~/Documents/programs/img/comfyui/custom_nodes && git clone https://github.com/kijai/ComfyUI-WanVideoWrapper.git",
       "models_needed": [
-        "Wan2_1-I2V-14B-480P (diffusion model — place in diffusion_models/ or unet/)",
-        "chinese-wav2vec2-base (audio encoder — downloads automatically or place in models/)",
-        "clip_vision_h.safetensors (CLIP vision — place in clip_vision/)",
+        "Wan2_1-I2V-14B-480P (diffusion model \u2014 place in diffusion_models/ or unet/)",
+        "chinese-wav2vec2-base (audio encoder \u2014 downloads automatically or place in models/)",
+        "clip_vision_h.safetensors (CLIP vision \u2014 place in clip_vision/)",
         "MeiGen-InfiniteTalk audio condition weights (place in models/)"
       ]
     },
     "_reference": "InfiniteTalk by MeiGen-AI: https://github.com/MeiGen-AI/InfiniteTalk",
-    "_note": "This workflow is a TEMPLATE — node names and wiring will need adjustment once WanVideoWrapper is installed. InfiniteTalk is the best lip sync option for ComfyUI (beats LatentSync, Sonic, MuseTalk). Works on 24GB VRAM with FP8. ~45 seconds per second of output on RTX 4090.",
+    "_note": "This workflow is a TEMPLATE \u2014 node names and wiring will need adjustment once WanVideoWrapper is installed. InfiniteTalk is the best lip sync option for ComfyUI (beats LatentSync, Sonic, MuseTalk). Works on 24GB VRAM with FP8. ~45 seconds per second of output on RTX 4090.",
     "_vram": "InfiniteTalk needs ~20GB VRAM. Run this as a SEPARATE pass from LTX Video generation. Offload LTX models first."
   },
   "version": 0.4

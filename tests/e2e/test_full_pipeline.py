@@ -22,9 +22,11 @@ from conftest import (
 
 pytestmark = [pytest.mark.e2e, pytest.mark.requires_api_key]
 
-# VNCCS prompt text — matches the known-working 03_static_pose_qwen_edit workflow
+# VNCCS prompts — matched from original VNCCS Pose Studio workflow
+# prompt = what to draw (from VNCCS Pose Studio: "Draw character from image2")
+VNCCS_PROMPT = "Draw character from image2"
+# instruction = how to process the images (uses VNCCS default instruction with our pose-specific text)
 VNCCS_INSTRUCTION = "Modify the character's pose to match the skeleton guide shown in Picture 2. Maintain the character's exact appearance, clothing, and identity."
-VNCCS_PROMPT = "Describe the key features of the input image (color, shape, size, texture, objects, background), then explain how the user's text instruction should alter or modify the image. Generate a new image that meets the user's requirements while maintaining consistency with the original input where appropriate."
 
 
 @pytest.fixture(scope="module")
@@ -120,19 +122,19 @@ def e2e_result(comfyui, llm_config):
             "6": {"class_type": "VAELoader", "inputs": {"vae_name": "qwen_image_vae.safetensors"}},
 
             # VNCCS encoder: character + skeleton → edited character image
-            # Settings match 03_static_pose_qwen_edit.json exactly
+            # Input names from ComfyUI /object_info/VNCCS_QWEN_Encoder
             "7": {"class_type": "VNCCS_QWEN_Encoder", "inputs": {
-                "instruction": VNCCS_INSTRUCTION,
-                "seed": 1,
-                "image2": None, "image3": None, "reference_image_list": None,
-                "image1_label": "Character Reference",
-                "image2_label": "Pose Guide",
-                "image3_label": "Picture 3",
-                "resolution": 1024,
-                "resize_method": "lanczos", "crop": "center",
-                "image1_weight": 1.0, "image2_weight": 1.0, "image3_weight": 1.0,
-                "start_step": 384,
                 "prompt": VNCCS_PROMPT,
+                "latent_image_index": 1,
+                "image3": None,
+                "image1_name": "Character Reference",
+                "image2_name": "Pose Guide",
+                "image3_name": "Picture 3",
+                "target_size": 1024,
+                "upscale_method": "lanczos", "crop_method": "center",
+                "weight1": 1.0, "weight2": 1.0, "weight3": 1.0,
+                "vl_size": 384,
+                "instruction": VNCCS_INSTRUCTION,
                 "qwen_2511": True,
                 "clip": ["5", 0], "vae": ["6", 0],
                 "image1": ["1", 0],       # character

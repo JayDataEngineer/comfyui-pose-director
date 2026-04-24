@@ -5,170 +5,1127 @@
     {
       "id": 1,
       "type": "LoadImage",
-      "pos": [0, 0],
-      "size": [315, 314],
-      "widgets_values": ["PoseDirector/edited_kf_0.png", "image"],
-      "_comment": "Edited keyframe 0 (VNCCS-edited character, NOT raw skeleton)"
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        315,
+        314
+      ],
+      "widgets_values": [
+        "PoseDirector/edited_kf_0.png",
+        "image"
+      ],
+      "_comment": "Edited keyframe 0 (VNCCS-edited character, NOT raw skeleton)",
+      "inputs": [
+        {
+          "name": "image",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            5
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ]
     },
     {
       "id": 2,
       "type": "LoadImage",
-      "pos": [0, 350],
-      "size": [315, 314],
-      "widgets_values": ["PoseDirector/edited_kf_1.png", "image"],
-      "_comment": "Edited keyframe 1"
+      "pos": [
+        0,
+        350
+      ],
+      "size": [
+        315,
+        314
+      ],
+      "widgets_values": [
+        "PoseDirector/edited_kf_1.png",
+        "image"
+      ],
+      "_comment": "Edited keyframe 1",
+      "inputs": [
+        {
+          "name": "image",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            10
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ]
     },
     {
       "id": 3,
       "type": "LoadImage",
-      "pos": [0, 700],
-      "size": [315, 314],
-      "widgets_values": ["PoseDirector/edited_kf_2.png", "image"],
-      "_comment": "Edited keyframe 2"
+      "pos": [
+        0,
+        700
+      ],
+      "size": [
+        315,
+        314
+      ],
+      "widgets_values": [
+        "PoseDirector/edited_kf_2.png",
+        "image"
+      ],
+      "_comment": "Edited keyframe 2",
+      "inputs": [
+        {
+          "name": "image",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            15
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ]
     },
     {
       "id": 4,
       "type": "LoadImage",
-      "pos": [0, 1050],
-      "size": [315, 314],
-      "widgets_values": ["PoseDirector/edited_kf_3.png", "image"],
-      "_comment": "Edited keyframe 3 (final pose)"
+      "pos": [
+        0,
+        1050
+      ],
+      "size": [
+        315,
+        314
+      ],
+      "widgets_values": [
+        "PoseDirector/edited_kf_3.png",
+        "image"
+      ],
+      "_comment": "Edited keyframe 3 (final pose)",
+      "inputs": [
+        {
+          "name": "image",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            20
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ]
     },
     {
       "id": 5,
       "type": "UnetLoaderGGUF",
-      "pos": [400, 0],
-      "size": [315, 100],
-      "widgets_values": ["ltx-2.3-22b-distilled-1.1-UD-Q4_K_M.gguf"],
-      "_comment": "LTX 2.3 Distilled 1.1 GGUF (Q4_K_M, 16.4GB). Place in unet/ or diffusion_models/"
+      "pos": [
+        400,
+        0
+      ],
+      "size": [
+        315,
+        100
+      ],
+      "widgets_values": [
+        "ltx-2.3-22b-distilled-1.1-UD-Q4_K_M.gguf"
+      ],
+      "_comment": "LTX 2.3 Distilled 1.1 GGUF (Q4_K_M, 16.4GB). Place in unet/ or diffusion_models/",
+      "inputs": [
+        {
+          "name": "unet_name",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            21
+          ]
+        }
+      ]
     },
     {
       "id": 6,
       "type": "DualCLIPLoaderGGUF",
-      "pos": [400, 150],
-      "size": [350, 100],
-      "widgets_values": ["gemma-3-12b-it-IQ4_XS.gguf", "ltxv_text_projection_dual.safetensors", "ltxv"],
-      "_comment": "IQ4_XS Gemma 3 12B (6.55GB) + LTXV text projection (2.2GB). Sequential loading: text encoder (7GB) → UNET (16GB) → VAE (1.5GB)"
+      "pos": [
+        400,
+        150
+      ],
+      "size": [
+        350,
+        100
+      ],
+      "widgets_values": [
+        "gemma-3-12b-it-IQ4_XS.gguf",
+        "ltxv_text_projection_dual.safetensors",
+        "ltxv"
+      ],
+      "_comment": "IQ4_XS Gemma 3 12B (6.55GB) + LTXV text projection (2.2GB). Sequential loading: text encoder (7GB) \u2192 UNET (16GB) \u2192 VAE (1.5GB)",
+      "inputs": [
+        {
+          "name": "clip_name1",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "clip_name2",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "type",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": []
+        }
+      ]
     },
     {
       "id": 7,
       "type": "VAELoader",
-      "pos": [400, 280],
-      "size": [315, 60],
-      "widgets_values": ["LTX23_video_vae_bf16.safetensors"],
-      "_comment": "Full Lighttricks VideoVAE (1.45GB). Required for LTXVAddGuideAdvanced. NOT taeltx2_3.safetensors (incompatible)."
+      "pos": [
+        400,
+        280
+      ],
+      "size": [
+        315,
+        60
+      ],
+      "widgets_values": [
+        "LTX23_video_vae_bf16.safetensors"
+      ],
+      "_comment": "Full Lighttricks VideoVAE (1.45GB). Required for LTXVAddGuideAdvanced. NOT taeltx2_3.safetensors (incompatible).",
+      "inputs": [
+        {
+          "name": "vae_name",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            3,
+            8,
+            13,
+            18,
+            26
+          ]
+        }
+      ]
     },
     {
       "id": 8,
       "type": "CLIPTextEncode",
-      "pos": [400, 400],
-      "size": [400, 150],
-      "widgets_values": ["A character waving their right hand in a friendly greeting. Smooth natural motion between poses."],
-      "_comment": "Motion description — describes the overall scene motion"
+      "pos": [
+        400,
+        400
+      ],
+      "size": [
+        400,
+        150
+      ],
+      "widgets_values": [
+        "A character waving their right hand in a friendly greeting. Smooth natural motion between poses."
+      ],
+      "_comment": "Motion description \u2014 describes the overall scene motion",
+      "inputs": [
+        {
+          "name": "text",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            1,
+            2
+          ]
+        }
+      ]
     },
     {
       "id": 9,
       "type": "EmptyLTXVLatentVideo",
-      "pos": [400, 600],
-      "size": [315, 120],
-      "widgets_values": [512, 512, 33, 1],
-      "_comment": "512x512, 33 frames (divisible by 8 + 1), batch 1. Widgets: width, height, length, batch_size"
+      "pos": [
+        400,
+        600
+      ],
+      "size": [
+        315,
+        120
+      ],
+      "widgets_values": [
+        512,
+        512,
+        33,
+        1
+      ],
+      "_comment": "512x512, 33 frames (divisible by 8 + 1), batch 1. Widgets: width, height, length, batch_size",
+      "inputs": [
+        {
+          "name": "width",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "length",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "batch_size",
+          "type": "INT",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            4
+          ]
+        }
+      ]
     },
     {
       "id": 10,
       "type": "LTXVAddGuideAdvanced",
-      "pos": [800, 0],
-      "size": [315, 200],
-      "widgets_values": [0, 1.0, 29, 0, "lanczos", "disabled"],
-      "_comment": "Keyframe 0 at frame_idx=0"
+      "pos": [
+        800,
+        0
+      ],
+      "size": [
+        315,
+        200
+      ],
+      "widgets_values": [
+        0,
+        1.0,
+        29,
+        0,
+        "lanczos",
+        "disabled"
+      ],
+      "_comment": "Keyframe 0 at frame_idx=0",
+      "inputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 1
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 2
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 3
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "link": 4
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 5
+        },
+        {
+          "name": "frame_idx",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "strength",
+          "type": "FLOAT",
+          "link": null
+        },
+        {
+          "name": "crf",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "blur_radius",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "interpolation",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "crop",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "positive",
+          "links": [
+            6
+          ]
+        },
+        {
+          "name": "negative",
+          "type": "negative",
+          "links": [
+            7
+          ]
+        },
+        {
+          "name": "latent",
+          "type": "latent",
+          "links": [
+            9
+          ]
+        }
+      ]
     },
     {
       "id": 11,
       "type": "LTXVAddGuideAdvanced",
-      "pos": [800, 300],
-      "size": [315, 200],
-      "widgets_values": [8, 1.0, 29, 0, "lanczos", "disabled"],
-      "_comment": "Keyframe 1 at frame_idx=8"
+      "pos": [
+        800,
+        300
+      ],
+      "size": [
+        315,
+        200
+      ],
+      "widgets_values": [
+        8,
+        1.0,
+        29,
+        0,
+        "lanczos",
+        "disabled"
+      ],
+      "_comment": "Keyframe 1 at frame_idx=8",
+      "inputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 6
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 7
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 8
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "link": 9
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 10
+        },
+        {
+          "name": "frame_idx",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "strength",
+          "type": "FLOAT",
+          "link": null
+        },
+        {
+          "name": "crf",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "blur_radius",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "interpolation",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "crop",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "positive",
+          "links": [
+            11
+          ]
+        },
+        {
+          "name": "negative",
+          "type": "negative",
+          "links": [
+            12
+          ]
+        },
+        {
+          "name": "latent",
+          "type": "latent",
+          "links": [
+            14
+          ]
+        }
+      ]
     },
     {
       "id": 12,
       "type": "LTXVAddGuideAdvanced",
-      "pos": [800, 600],
-      "size": [315, 200],
-      "widgets_values": [16, 1.0, 29, 0, "lanczos", "disabled"],
-      "_comment": "Keyframe 2 at frame_idx=16"
+      "pos": [
+        800,
+        600
+      ],
+      "size": [
+        315,
+        200
+      ],
+      "widgets_values": [
+        16,
+        1.0,
+        29,
+        0,
+        "lanczos",
+        "disabled"
+      ],
+      "_comment": "Keyframe 2 at frame_idx=16",
+      "inputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 11
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 12
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 13
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "link": 14
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 15
+        },
+        {
+          "name": "frame_idx",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "strength",
+          "type": "FLOAT",
+          "link": null
+        },
+        {
+          "name": "crf",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "blur_radius",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "interpolation",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "crop",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "positive",
+          "links": [
+            16
+          ]
+        },
+        {
+          "name": "negative",
+          "type": "negative",
+          "links": [
+            17
+          ]
+        },
+        {
+          "name": "latent",
+          "type": "latent",
+          "links": [
+            19
+          ]
+        }
+      ]
     },
     {
       "id": 13,
       "type": "LTXVAddGuideAdvanced",
-      "pos": [800, 900],
-      "size": [315, 200],
-      "widgets_values": [24, 1.0, 29, 0, "lanczos", "disabled"],
-      "_comment": "Keyframe 3 at frame_idx=24"
+      "pos": [
+        800,
+        900
+      ],
+      "size": [
+        315,
+        200
+      ],
+      "widgets_values": [
+        24,
+        1.0,
+        29,
+        0,
+        "lanczos",
+        "disabled"
+      ],
+      "_comment": "Keyframe 3 at frame_idx=24",
+      "inputs": [
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 16
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 17
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 18
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "link": 19
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 20
+        },
+        {
+          "name": "frame_idx",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "strength",
+          "type": "FLOAT",
+          "link": null
+        },
+        {
+          "name": "crf",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "blur_radius",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "interpolation",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "crop",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "positive",
+          "links": [
+            22
+          ]
+        },
+        {
+          "name": "negative",
+          "type": "negative",
+          "links": [
+            23
+          ]
+        },
+        {
+          "name": "latent",
+          "type": "latent",
+          "links": [
+            24
+          ]
+        }
+      ]
     },
     {
       "id": 14,
       "type": "KSampler",
-      "pos": [1200, 300],
-      "size": [315, 260],
-      "widgets_values": [42, "fixed", 30, 1.0, "euler", "simple"],
-      "_comment": "Takes the chained conditioning from the last LTXVAddGuideAdvanced"
+      "pos": [
+        1200,
+        300
+      ],
+      "size": [
+        315,
+        260
+      ],
+      "widgets_values": [
+        42,
+        "fixed",
+        30,
+        1.0,
+        "euler",
+        "simple"
+      ],
+      "_comment": "Takes the chained conditioning from the last LTXVAddGuideAdvanced",
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 21
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "steps",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "cfg",
+          "type": "FLOAT",
+          "link": null
+        },
+        {
+          "name": "sampler_name",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "scheduler",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 22
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 23
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 24
+        },
+        {
+          "name": "denoise",
+          "type": "FLOAT",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            25
+          ]
+        }
+      ]
     },
     {
       "id": 15,
       "type": "VAEDecode",
-      "pos": [1200, 600],
-      "size": [210, 80],
-      "_comment": "Decode latents to video frames"
+      "pos": [
+        1200,
+        600
+      ],
+      "size": [
+        210,
+        80
+      ],
+      "_comment": "Decode latents to video frames",
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 25
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 26
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            27
+          ]
+        }
+      ]
     },
     {
       "id": 16,
       "type": "VHSVideoCombine",
-      "pos": [1500, 300],
-      "size": [315, 200],
-      "widgets_values": ["PoseDirector/output", 24, 0, "auto", "libx264", "mp4", false, false],
-      "_comment": "Combine frames into video. 24 fps, mp4 output."
+      "pos": [
+        1500,
+        300
+      ],
+      "size": [
+        315,
+        200
+      ],
+      "widgets_values": [
+        "PoseDirector/output",
+        24,
+        0,
+        "auto",
+        "libx264",
+        "mp4",
+        false,
+        false
+      ],
+      "_comment": "Combine frames into video. 24 fps, mp4 output.",
+      "inputs": [],
+      "outputs": []
     }
   ],
   "links": [
-    [1, 8, 0, 10, 0, "CONDITIONING"],
-    [2, 8, 0, 10, 1, "CONDITIONING"],
-    [3, 7, 0, 10, 2, "VAE"],
-    [4, 9, 0, 10, 3, "LATENT"],
-    [5, 1, 0, 10, 4, "IMAGE"],
-    [6, 10, 0, 11, 0, "CONDITIONING"],
-    [7, 10, 1, 11, 1, "CONDITIONING"],
-    [8, 7, 0, 11, 2, "VAE"],
-    [9, 10, 2, 11, 3, "LATENT"],
-    [10, 2, 0, 11, 4, "IMAGE"],
-    [11, 11, 0, 12, 0, "CONDITIONING"],
-    [12, 11, 1, 12, 1, "CONDITIONING"],
-    [13, 7, 0, 12, 2, "VAE"],
-    [14, 11, 2, 12, 3, "LATENT"],
-    [15, 3, 0, 12, 4, "IMAGE"],
-    [16, 12, 0, 13, 0, "CONDITIONING"],
-    [17, 12, 1, 13, 1, "CONDITIONING"],
-    [18, 7, 0, 13, 2, "VAE"],
-    [19, 12, 2, 13, 3, "LATENT"],
-    [20, 4, 0, 13, 4, "IMAGE"],
-    [21, 5, 0, 14, 0, "MODEL"],
-    [22, 13, 0, 14, 1, "CONDITIONING"],
-    [23, 13, 1, 14, 2, "CONDITIONING"],
-    [24, 13, 2, 14, 3, "LATENT"],
-    [25, 14, 0, 15, 0, "LATENT"],
-    [26, 7, 0, 15, 1, "VAE"],
-    [27, 15, 0, 16, 0, "IMAGE"]
+    [
+      1,
+      8,
+      0,
+      10,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      2,
+      8,
+      0,
+      10,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      3,
+      7,
+      0,
+      10,
+      2,
+      "VAE"
+    ],
+    [
+      4,
+      9,
+      0,
+      10,
+      3,
+      "LATENT"
+    ],
+    [
+      5,
+      1,
+      0,
+      10,
+      4,
+      "IMAGE"
+    ],
+    [
+      6,
+      10,
+      0,
+      11,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      7,
+      10,
+      1,
+      11,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      8,
+      7,
+      0,
+      11,
+      2,
+      "VAE"
+    ],
+    [
+      9,
+      10,
+      2,
+      11,
+      3,
+      "LATENT"
+    ],
+    [
+      10,
+      2,
+      0,
+      11,
+      4,
+      "IMAGE"
+    ],
+    [
+      11,
+      11,
+      0,
+      12,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      12,
+      11,
+      1,
+      12,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      13,
+      7,
+      0,
+      12,
+      2,
+      "VAE"
+    ],
+    [
+      14,
+      11,
+      2,
+      12,
+      3,
+      "LATENT"
+    ],
+    [
+      15,
+      3,
+      0,
+      12,
+      4,
+      "IMAGE"
+    ],
+    [
+      16,
+      12,
+      0,
+      13,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      17,
+      12,
+      1,
+      13,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      18,
+      7,
+      0,
+      13,
+      2,
+      "VAE"
+    ],
+    [
+      19,
+      12,
+      2,
+      13,
+      3,
+      "LATENT"
+    ],
+    [
+      20,
+      4,
+      0,
+      13,
+      4,
+      "IMAGE"
+    ],
+    [
+      21,
+      5,
+      0,
+      14,
+      0,
+      "MODEL"
+    ],
+    [
+      22,
+      13,
+      0,
+      14,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      23,
+      13,
+      1,
+      14,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      24,
+      13,
+      2,
+      14,
+      3,
+      "LATENT"
+    ],
+    [
+      25,
+      14,
+      0,
+      15,
+      0,
+      "LATENT"
+    ],
+    [
+      26,
+      7,
+      0,
+      15,
+      1,
+      "VAE"
+    ],
+    [
+      27,
+      15,
+      0,
+      16,
+      0,
+      "IMAGE"
+    ]
   ],
   "config": {},
   "extra": {
     "_note": "Chain LTXVAddGuideAdvanced nodes: each takes (positive, negative, latent) from previous, adds its keyframe at frame_idx, passes along. KSampler takes final chained output. For 9+ frame videos, frame_idx MUST be divisible by 8.",
-    "_frame_numbering": "33 frames → guides at 0, 8, 16, 24 (4 keyframes evenly spaced). Last guide at 24, video ends at frame 32.",
-    "_vram_management": "RTX 4090 (24GB): Sequential loading — text encoder (7GB) offloaded before UNET (16GB) loads. Restart ComfyUI between pipeline stages to clear accumulated VRAM.",
+    "_frame_numbering": "33 frames \u2192 guides at 0, 8, 16, 24 (4 keyframes evenly spaced). Last guide at 24, video ends at frame 32.",
+    "_vram_management": "RTX 4090 (24GB): Sequential loading \u2014 text encoder (7GB) offloaded before UNET (16GB) loads. Restart ComfyUI between pipeline stages to clear accumulated VRAM.",
     "_model_requirements": {
       "unet": "ltx-2.3-22b-distilled-1.1-UD-Q4_K_M.gguf in unet/ (16.4GB)",
-      "text_encoder": "gemma-3-12b-it-IQ4_XS.gguf in clip/ (6.55GB) — loaded via DualCLIPLoaderGGUF",
-      "text_projection": "ltxv_text_projection_dual.safetensors in text_encoders/ (2.2GB) — dual_linear projection weights",
-      "vae": "LTX23_video_vae_bf16.safetensors in vae/ (1.45GB) — full VideoVAE, NOT taeltx2_3.safetensors"
+      "text_encoder": "gemma-3-12b-it-IQ4_XS.gguf in clip/ (6.55GB) \u2014 loaded via DualCLIPLoaderGGUF",
+      "text_projection": "ltxv_text_projection_dual.safetensors in text_encoders/ (2.2GB) \u2014 dual_linear projection weights",
+      "vae": "LTX23_video_vae_bf16.safetensors in vae/ (1.45GB) \u2014 full VideoVAE, NOT taeltx2_3.safetensors"
     }
   },
   "version": 0.4

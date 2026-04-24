@@ -141,9 +141,9 @@ def e2e_result(comfyui, llm_config):
                 "image2": ["21", 0],      # specific keyframe skeleton
             }},
 
-            # KSampler — 30 steps (matches working workflow)
+            # KSampler — 40 steps for better VNCCS quality
             "8": {"class_type": "KSampler", "inputs": {
-                "seed": 42, "steps": 30, "cfg": 1.0,
+                "seed": 42, "steps": 40, "cfg": 1.0,
                 "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0,
                 "model": ["4", 0], "positive": ["7", 0], "negative": ["7", 1],
                 "latent_image": ["7", 2],
@@ -188,9 +188,9 @@ def e2e_result(comfyui, llm_config):
         }},
         "7": {"class_type": "VAELoader", "inputs": {"vae_name": "LTX23_video_vae_bf16.safetensors"}},
 
-        # Text prompt
+        # Text prompt — explicitly exclude text/signage to prevent hallucinated letters
         "8": {"class_type": "CLIPTextEncode", "inputs": {
-            "text": "A cute anime girl performing a playful dance, waving arms and swaying. Smooth natural motion.",
+            "text": "A cute anime girl performing a playful dance, waving arms and swaying. Smooth natural motion. Clean scene with no text, letters, signs, or watermarks.",
             "clip": ["6", 0],
         }},
 

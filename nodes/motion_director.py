@@ -6,6 +6,7 @@ import torch
 
 from ..utils.api_client import call_llm
 from ..utils.json_parser import parse_llm_json, extract_keypoints_from_dwpose
+from ..utils.skeleton_validator import validate_keypoints, validate_keyframe_consistency
 from .pose_renderer import PoseRendererNode
 
 
@@ -54,6 +55,7 @@ class MotionDirectorNode:
             },
             "optional": {
                 "pose_keypoint": ("POSE_KEYPOINT",),
+                "base_pose": ("STRING", {"default": ""}),
             }
         }
 
@@ -64,7 +66,7 @@ class MotionDirectorNode:
     DESCRIPTION = "Generate a sequence of keyframe poses from a start pose and motion description using an LLM."
 
     def generate(self, keypoints, motion_description, num_keyframes, total_frames,
-                 base_url, api_key, model, width, height, pose_keypoint=None):
+                 base_url, api_key, model, width, height, pose_keypoint=None, base_pose=""):
         # If POSE_KEYPOINT provided, extract from it
         if pose_keypoint is not None:
             kpts, canvas_h, canvas_w = extract_keypoints_from_dwpose(pose_keypoint)
@@ -87,11 +89,18 @@ Image dimensions: {width}x{height}
 Motion description: {motion_description}
 Total frames: {total_frames}
 Number of keyframes to generate: {num_keyframes}
-Target frame numbers: {target_frames}
+Target frame numbers: {target_frames}"""
 
-Generate keyframe poses for the motion described above. The first keyframe (frame 0) should be close to the starting pose. Generate smooth, anatomically plausible intermediate and ending poses.
+        # If a base pose from the library is provided, include it as an anatomical anchor
+        if base_pose:
+            try:
+                from ..utils.pose_library import load_pose
+                pose_data = load_pose(base_pose)
+                user_msg += f"\n\nAnatomical reference (base pose for proportion/scale anchor):\n{json.dumps(pose_data['keypoints'])}\nKeep limb lengths and body proportions consistent with this reference across all keyframes."
+            except (FileNotFoundError, KeyError):
+                print(f"[MotionDirector] Warning: base pose '{base_pose}' not found, skipping")
 
-Respond with ONLY the JSON keyframes object."""
+        user_msg += "\n\nGenerate keyframe poses for the motion described above. The first keyframe (frame 0) should be close to the starting pose. Generate smooth, anatomically plausible intermediate and ending poses.\n\nRespond with ONLY the JSON keyframes object."
 
         response = call_llm(base_url, api_key, model, SYSTEM_PROMPT, user_msg)
 
@@ -103,6 +112,22 @@ Respond with ONLY the JSON keyframes object."""
             keyframes_data = keyframes_data[0] if keyframes_data else {}
         keyframes = keyframes_data["keyframes"]
         keyframes_json = json.dumps(keyframes_data)
+
+        # Soft validation: log anatomical issues per keyframe
+        all_kpts = []
+        for i, kf in enumerate(keyframes):
+            kf_kpts = kf["keypoints"]
+            is_valid, issues = validate_keypoints(kf_kpts, width, height)
+            if not is_valid or issues:
+                for issue in issues:
+                    print(f"[MotionDirector] Keyframe {i} validation {issue.severity}: {issue.message}")
+            all_kpts.append(kf_kpts)
+
+        # Cross-keyframe consistency check (shimmer detection)
+        if len(all_kpts) >= 2:
+            consistency = validate_keyframe_consistency(all_kpts)
+            if not consistency["is_consistent"]:
+                print(f"[MotionDirector] Keyframe consistency warning: {consistency['flagged_bones']}")
 
         # Render each keyframe into a skeleton image
         renderer = PoseRendererNode()

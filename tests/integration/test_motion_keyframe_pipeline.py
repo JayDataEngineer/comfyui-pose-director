@@ -87,7 +87,7 @@ def motion_keyframe_result(comfyui, character_image, llm_config):
 
         # KSampler for keyframe 0
         "10": {"class_type": "KSampler", "inputs": {
-            "seed": 42, "steps": 15, "cfg": 1.0,
+            "seed": 42, "steps": 40, "cfg": 1.0,
             "sampler_name": "euler", "scheduler": "simple",
             "denoise": 1.0,
             "model": ["6", 0],

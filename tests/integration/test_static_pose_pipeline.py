@@ -76,7 +76,7 @@ def static_pose_result(comfyui, character_image, llm_config):
 
         # Sample
         "8": {"class_type": "KSampler", "inputs": {
-            "seed": 42, "steps": 15, "cfg": 1.0,
+            "seed": 42, "steps": 40, "cfg": 1.0,
             "sampler_name": "euler", "scheduler": "simple",
             "denoise": 1.0,
             "model": ["4", 0],

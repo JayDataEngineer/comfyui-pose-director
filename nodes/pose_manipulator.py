@@ -4,6 +4,7 @@ import json
 
 from ..utils.api_client import call_llm
 from ..utils.json_parser import parse_llm_json, extract_keypoints_from_dwpose
+from ..utils.skeleton_validator import validate_keypoints
 from .pose_renderer import PoseRendererNode
 
 SYSTEM_PROMPT = """You are a pose manipulation assistant. You receive OpenPose keypoint data for a person and a text instruction describing how to modify their pose.
@@ -39,6 +40,7 @@ class PoseManipulatorNode:
             },
             "optional": {
                 "pose_keypoint": ("POSE_KEYPOINT",),
+                "base_pose": ("STRING", {"default": ""}),
             }
         }
 
@@ -48,7 +50,7 @@ class PoseManipulatorNode:
     CATEGORY = "pose_director"
     DESCRIPTION = "Use an LLM to modify an OpenPose skeleton based on a text instruction."
 
-    def manipulate(self, keypoints, instruction, base_url, api_key, model, width, height, pose_keypoint=None):
+    def manipulate(self, keypoints, instruction, base_url, api_key, model, width, height, pose_keypoint=None, base_pose=""):
         # If POSE_KEYPOINT provided, extract from it (takes priority over STRING input)
         if pose_keypoint is not None:
             kpts, canvas_h, canvas_w = extract_keypoints_from_dwpose(pose_keypoint)
@@ -63,14 +65,29 @@ class PoseManipulatorNode:
 
 Image dimensions: {width}x{height}
 
-Instruction: {instruction}
+Instruction: {instruction}"""
 
-Respond with ONLY the modified keypoints array."""
+        # If a base pose from the library is provided, include it as an anatomical anchor
+        if base_pose:
+            try:
+                from ..utils.pose_library import load_pose
+                pose_data = load_pose(base_pose)
+                user_msg += f"\n\nAnatomical reference (base pose for proportion/scale anchor):\n{json.dumps(pose_data['keypoints'])}\nUse these as a reference for limb proportions and body scale."
+            except (FileNotFoundError, KeyError):
+                print(f"[PoseManipulator] Warning: base pose '{base_pose}' not found, skipping")
+
+        user_msg += "\n\nRespond with ONLY the modified keypoints array."
 
         response = call_llm(base_url, api_key, model, SYSTEM_PROMPT, user_msg)
 
         new_kpts = parse_llm_json(response)
         new_kpts_json = json.dumps(new_kpts)
+
+        # Soft validation: log anatomical issues but don't block
+        is_valid, issues = validate_keypoints(new_kpts, width, height)
+        if not is_valid or issues:
+            for issue in issues:
+                print(f"[PoseManipulator] Validation {issue.severity}: {issue.message}")
 
         # Build POSE_KEYPOINT compatible output for downstream ControlNet nodes
         pose_keypoint_out = {

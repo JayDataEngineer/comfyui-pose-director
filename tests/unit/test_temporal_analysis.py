@@ -1,6 +1,8 @@
 """Unit tests for temporal stability analysis."""
 
 import os
+import shutil
+import subprocess
 import tempfile
 
 import numpy as np
@@ -9,6 +11,7 @@ import pytest
 from pose_director_root.utils.temporal_analysis import (
     analyze_temporal_stability,
     compute_ssim,
+    extract_frames,
 )
 
 
@@ -109,3 +112,84 @@ class TestAnalyzeTemporalStability:
         assert "std_similarity" in result
         assert "num_frames" in result
         assert result["num_frames"] == 3
+
+    def test_single_frame_defaults(self):
+        """Single-frame video should return default similarity values."""
+        frame = np.full((64, 64, 3), 128, dtype=np.uint8)
+        mp4 = self._make_test_mp4([frame])
+        result = analyze_temporal_stability(mp4)
+        assert result["num_frames"] == 1
+        assert result["temporal_stability_score"] == 1.0
+        assert result["per_frame_metrics"] == []
+        assert result["flicker_frames"] == []
+
+
+class TestExtractFrames:
+    """Tests for extract_frames function."""
+
+    def test_file_not_found(self):
+        """Should raise FileNotFoundError for missing MP4."""
+        with pytest.raises(FileNotFoundError):
+            extract_frames("/nonexistent/path/video.mp4")
+
+    def test_ffmpeg_failure(self):
+        """Should raise RuntimeError when ffmpeg exits with error."""
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+            f.write(b"not a valid mp4 file")
+            bad_path = f.name
+        try:
+            with pytest.raises(RuntimeError, match="ffmpeg failed"):
+                extract_frames(bad_path)
+        finally:
+            os.unlink(bad_path)
+
+    def test_custom_output_dir(self):
+        """Should extract frames to provided directory and not clean it up."""
+        from PIL import Image as PILImage
+
+        frame = np.full((32, 32, 3), 128, dtype=np.uint8)
+        tmpdir = tempfile.mkdtemp(prefix="test_extract_")
+        for i in range(3):
+            PILImage.fromarray(frame).save(os.path.join(tmpdir, f"input_{i:04d}.png"))
+
+        mp4_path = os.path.join(tmpdir, "test.mp4")
+        subprocess.run(
+            ["ffmpeg", "-y", "-framerate", "8", "-i", os.path.join(tmpdir, "input_%04d.png"),
+             "-c:v", "libx264", "-pix_fmt", "yuv420p", mp4_path],
+            capture_output=True, timeout=30,
+        )
+
+        out_dir = tempfile.mkdtemp(prefix="test_output_")
+        try:
+            frames = extract_frames(mp4_path, output_dir=out_dir)
+            assert len(frames) == 3
+            assert all(os.path.exists(f) for f in frames)
+            # Directory should still exist since cleanup=False
+            assert os.path.isdir(out_dir)
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+            shutil.rmtree(out_dir, ignore_errors=True)
+
+    def test_auto_cleanup(self):
+        """Without output_dir, temp directory should be cleaned up automatically."""
+        from PIL import Image as PILImage
+
+        frame = np.full((32, 32, 3), 128, dtype=np.uint8)
+        tmpdir = tempfile.mkdtemp(prefix="test_extract_")
+        for i in range(2):
+            PILImage.fromarray(frame).save(os.path.join(tmpdir, f"input_{i:04d}.png"))
+
+        mp4_path = os.path.join(tmpdir, "test.mp4")
+        subprocess.run(
+            ["ffmpeg", "-y", "-framerate", "8", "-i", os.path.join(tmpdir, "input_%04d.png"),
+             "-c:v", "libx264", "-pix_fmt", "yuv420p", mp4_path],
+            capture_output=True, timeout=30,
+        )
+
+        try:
+            frames = extract_frames(mp4_path)
+            assert len(frames) == 2
+            # After auto-cleanup, frames should not exist
+            assert not os.path.exists(frames[0])
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)

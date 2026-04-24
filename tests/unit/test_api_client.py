@@ -195,6 +195,128 @@ class TestCallLlmVision:
         # Should not raise — batch dim stripped internally
 
 
+class TestRetryLoop:
+    """Tests for _retry_loop edge cases."""
+
+    @patch("pose_director_root.utils.api_client.OpenAI")
+    def test_empty_content_with_reasoning_fallback(self, mock_openai_cls):
+        """If content is empty but reasoning_content exists, return reasoning."""
+        mock_client = MagicMock()
+        mock_openai_cls.return_value = mock_client
+
+        msg = MagicMock()
+        msg.content = ""
+        msg.reasoning_content = '{"result": "from reasoning"}'
+        choice = MagicMock()
+        choice.message = msg
+        resp = MagicMock()
+        resp.choices = [choice]
+
+        mock_client.chat.completions.create.return_value = resp
+        result = call_llm(
+            base_url="http://test/v1",
+            api_key="k",
+            model="m",
+            system_prompt="",
+            user_message="",
+        )
+        assert result == '{"result": "from reasoning"}'
+
+    @patch("pose_director_root.utils.api_client.time")
+    @patch("pose_director_root.utils.api_client.OpenAI")
+    def test_api_connection_error_retries(self, mock_openai_cls, mock_time):
+        """APIConnectionError should be retried."""
+        from openai import APIConnectionError
+
+        mock_client = MagicMock()
+        mock_openai_cls.return_value = mock_client
+        mock_time.sleep = MagicMock()
+        mock_time.time.side_effect = [0] * 10
+
+        mock_client.chat.completions.create.side_effect = [
+            APIConnectionError(message="connection refused", request=MagicMock()),
+            _mock_response("recovered"),
+        ]
+
+        result = call_llm(
+            base_url="http://test/v1",
+            api_key="k",
+            model="m",
+            system_prompt="",
+            user_message="",
+            max_retries=2,
+        )
+        assert result == "recovered"
+        assert mock_client.chat.completions.create.call_count == 2
+
+    @patch("pose_director_root.utils.api_client.time")
+    @patch("pose_director_root.utils.api_client.OpenAI")
+    def test_api_status_error_429_retries_with_backoff(self, mock_openai_cls, mock_time):
+        """HTTP 429 should trigger exponential backoff and retry."""
+        from openai import APIStatusError
+
+        mock_client = MagicMock()
+        mock_openai_cls.return_value = mock_client
+        mock_time.sleep = MagicMock()
+        mock_time.time.side_effect = [0] * 10
+
+        error_429 = APIStatusError(
+            message="rate limited",
+            response=MagicMock(status_code=429),
+            body=None,
+        )
+        mock_client.chat.completions.create.side_effect = [
+            error_429,
+            error_429,
+            _mock_response("ok after rate limit"),
+        ]
+
+        result = call_llm(
+            base_url="http://test/v1",
+            api_key="k",
+            model="m",
+            system_prompt="",
+            user_message="",
+            max_retries=3,
+        )
+        assert result == "ok after rate limit"
+        assert mock_client.chat.completions.create.call_count == 3
+        # Should have slept at least twice for backoff
+        assert mock_time.sleep.call_count >= 2
+
+    @patch("pose_director_root.utils.api_client.time")
+    @patch("pose_director_root.utils.api_client.OpenAI")
+    def test_api_status_error_503_retries(self, mock_openai_cls, mock_time):
+        """HTTP 503 should also trigger retry with backoff."""
+        from openai import APIStatusError
+
+        mock_client = MagicMock()
+        mock_openai_cls.return_value = mock_client
+        mock_time.sleep = MagicMock()
+        mock_time.time.side_effect = [0] * 10
+
+        error_503 = APIStatusError(
+            message="service unavailable",
+            response=MagicMock(status_code=503),
+            body=None,
+        )
+        mock_client.chat.completions.create.side_effect = [
+            error_503,
+            _mock_response("ok"),
+        ]
+
+        result = call_llm(
+            base_url="http://test/v1",
+            api_key="k",
+            model="m",
+            system_prompt="",
+            user_message="",
+            max_retries=2,
+        )
+        assert result == "ok"
+        assert mock_client.chat.completions.create.call_count == 2
+
+
 class TestTensorToBase64:
     """Tests for _tensor_to_base64() helper."""
 

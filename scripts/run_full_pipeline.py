@@ -51,6 +51,8 @@ from pipeline.workflows import (
 )
 
 API_KEY = os.environ.get("GEMINI_API_KEY", "")
+ZAI_KEY = os.environ.get("ZAI_API_KEY", "")
+OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 
 
 def log(msg: str):
@@ -59,7 +61,17 @@ def log(msg: str):
 
 def get_llm_config():
     """Return (base_url, model, api_key) for LLM calls."""
-    # Prefer local llama.cpp
+    # Prefer OpenRouter (cheap, fast, no VRAM)
+    if OPENROUTER_KEY:
+        log("Using OpenRouter (deepseek-v4-flash)")
+        return ("https://openrouter.ai/api/v1", "deepseek/deepseek-v4-flash", OPENROUTER_KEY)
+
+    # ZAI cloud (no VRAM cost)
+    if ZAI_KEY:
+        log("Using ZAI cloud API (glm-4.5-air)")
+        return ("https://api.z.ai/api/coding/paas/v4", "glm-4.5-air", ZAI_KEY)
+
+    # Try local llama.cpp
     try:
         r = requests.get("http://127.0.0.1:8001/health", timeout=2)
         if r.status_code == 200:
@@ -79,7 +91,7 @@ def get_llm_config():
             API_KEY,
         )
 
-    raise RuntimeError("No LLM available. Set GEMINI_API_KEY or start llama.cpp on :8001")
+    raise RuntimeError("No LLM available. Set OPENROUTER_API_KEY, ZAI_API_KEY, GEMINI_API_KEY, or start llama.cpp on :8001")
 
 
 def stage_a_character() -> bytes:

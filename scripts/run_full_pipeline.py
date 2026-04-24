@@ -88,8 +88,12 @@ def stage_a_character() -> bytes:
     log("STAGE A: Character Generation")
     log("=" * 50)
 
-    workflow = build_character_workflow(filename_prefix="pipeline/character")
-    result = submit_workflow(workflow, timeout=300)
+    import random
+    workflow = build_character_workflow(
+        seed=random.randint(0, 999999),
+        filename_prefix="pipeline/character",
+    )
+    result = submit_workflow(workflow)
     images = get_output_images(result["outputs"], "14")
     assert len(images) > 0, "No character image generated"
     img = Image.open(io.BytesIO(images[0]))
@@ -121,7 +125,7 @@ def stage_c_keyframes(character_png: bytes) -> list:
         filename_prefix="pipeline/keyframes",
     )
 
-    result = submit_workflow(workflow, timeout=180)
+    result = submit_workflow(workflow)
 
     # Download the saved keyframe images
     images = get_output_images(result["outputs"], "4")
@@ -151,7 +155,7 @@ def stage_d_edit_keyframes(character_png: bytes, keyframe_images: list) -> list:
             instruction=VNCCS_INSTRUCTION,
             filename_prefix=f"pipeline/edited_kf{i}",
         )
-        result = submit_workflow(workflow, timeout=300)
+        result = submit_workflow(workflow)
         images = get_output_images(result["outputs"], "10")
         assert len(images) > 0, f"No edited image for keyframe {i}"
         upload_image(images[0], f"edited_kf{i}.png", "PoseDirector")
@@ -183,7 +187,7 @@ def stage_e_video(edited_keyframes: list) -> bytes:
         filename_prefix="pipeline/output",
     )
 
-    result = submit_workflow(workflow, timeout=600)
+    result = submit_workflow(workflow)
     video = get_output_video(result["outputs"], "16")
     assert video is not None, "No video output"
     log(f"Video: {len(video)} bytes")

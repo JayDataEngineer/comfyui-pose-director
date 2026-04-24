@@ -10,7 +10,7 @@ import requests
 
 COMFYUI_URL = "http://127.0.0.1:8465"
 POLL_INTERVAL = 2
-MAX_WAIT = 600  # 10 minutes max per workflow
+MAX_WAIT = 900  # 15 minutes max per workflow (first run includes model loading)
 
 CUI_DIR = "/home/ubuntu/Documents/programs/img/comfyui"
 CUI_PYTHON = os.path.join(CUI_DIR, ".venv/bin/python")

@@ -2,231 +2,241 @@
 
 AI-driven skeleton manipulation nodes for ComfyUI. Uses an LLM (via OpenAI-compatible API) to generate and refine OpenPose keyframes for character manipulation, then feeds them into Qwen Image Edit and LTX Video.
 
-## ComfyUI Environment Setup
+## Autonomous Iteration Workflow
 
-There is a standalone setup script at `~/Documents/programs/img/comfyui-setup/` that installs a complete ComfyUI environment from scratch. It can be run from anywhere.
+This project has a closed-loop AI workflow for continuous pipeline improvement:
 
-### `setup_comfyui.sh` — Full Installer
-
-```bash
-bash setup_comfyui.sh --models /home/ubuntu/Documents/programs/shared-docker-infra/models/image-gen/comfyui [install_dir]
+```
+┌─────────────────────────────────────────────────────────┐
+│  1. RUN     Execute pipeline (full or partial stage)    │
+│     ↓        via ComfyUI MCP → execute_workflow         │
+│  2. ANALYZE  Vision-assess output images                │
+│     ↓        via analyze_image, compare_outputs         │
+│  3. RESEARCH  If issues found, research solutions       │
+│     ↓        via MCP web tools, discover, CivitAI       │
+│  4. MODIFY   Apply changes to workflows/code            │
+│     ↓        via apply_workflow_patch, Edit, Write      │
+│  5. RECORD   Log what worked / didn't / why             │
+│     └──────→ memory files, record_outcome, add_note     │
+│                  then loop back to step 1                │
+└─────────────────────────────────────────────────────────┘
 ```
 
-- `install_dir` defaults to `./ComfyUI` (relative to where you run the script)
-- `--models` is optional — if provided, writes `extra_model_paths.yaml` so ComfyUI can find checkpoints, loras, vae, etc. from a shared model storage directory
-- On this machine the shared models path is: `/home/ubuntu/Documents/programs/shared-docker-infra/models/image-gen/comfyui`
-- Idempotent: re-running pulls latest git changes instead of re-cloning
+### Step-by-Step Pattern
 
-**What it does (8 steps):**
-1. Clone/pull ComfyUI from GitHub
-2. Clone 11 custom nodes into `custom_nodes/` (Manager, Comfyroll, controlnet_aux, GGUF, Impact Pack, Inspire, VideoHelperSuite, QwenEditUtils, VNCCS, VNCCS_Utils)
-3. Create Python 3.12 venv via `uv` (system Python is 3.14, too bleeding edge)
-4. Install PyTorch 2.10.0+cu130 from PyTorch's cu130 index
-5. Install flash-attn prebuilt wheel + `nvidia-cuda-runtime-cu12`
-6. Install ComfyUI requirements (strips torch lines to avoid conflicts)
-7. Install extras (triton, setuptools, wheel, ninja, sageattention, onnx) + best-effort custom node deps
-8. Write `extra_model_paths.yaml` if `--models` was provided
+**1. Run Pipeline Stage**
+- Use MCP tools: `load_workflow` → `validate_before_execute` → `execute_workflow`
+- Or run E2E test: `RUN_E2E=1 uv run pytest tests/e2e/ -v -s`
+- Partial stages: load individual workflow from `workflows/` directory
+- Always check ComfyUI is running first: `comfyui_agent_ping`
 
-### `run.sh` — Launcher
+**2. Analyze Output Images**
+- `analyze_image` — quality score (0-1), artifacts, prompt adherence, suggestions
+- `compare_outputs` — A/B comparison after a workflow change
+- `hash_compare_images` — fast pre-check before detailed vision analysis
+- Output images land in: `/home/ubuntu/Documents/programs/img/comfyui/output/e2e/`
+- Get absolute paths: `get_output_path` or `get_history`
 
-```bash
-bash run.sh
-```
+**3. Research Solutions**
+- Spawn a research subagent for web searches when vision analysis reveals issues
+- `discover` — search for models/nodes on CivitAI, HuggingFace, registry
+- `get_node_info` — check exact parameter schemas before modifying workflows
+- `get_editable_fields` — see what can be changed without rewiring
+- Use the `research` MCP tools (search, scrape, crawl) for online solutions
 
-cds into the ComfyUI directory next to the script and runs:
-```
-PYTHONWARNINGS="ignore::FutureWarning,ignore::SyntaxWarning" uv run main.py --port 8465 --use-flash-attention --dont-upcast-attention
-```
+**4. Modify and Test**
+- `apply_workflow_patch` — surgical parameter changes to loaded workflows
+- `set_input` / `connect_nodes` / `add_node` — programmatic workflow editing
+- `preview_workflow_patch` — preview changes before applying
+- `undo_workflow_patch` — rollback if change doesn't help
+- For code changes: Edit tool → rsync to ComfyUI → restart ComfyUI
 
-### Key Technical Details
+**5. Record and Iterate**
+- `record_outcome` — log parameters, quality scores, what worked
+- `add_note` — session notes (preference, observation, decision, tip)
+- `save_session` — persist state across conversations
+- `get_learned_patterns` — query past outcomes for recommendations
+- Update `memory/MEMORY.md` with stable findings
 
-**GPU & CUDA:**
-- RTX 4090 (24GB), CUDA toolkit 13.1, Ubuntu, 62GB RAM
-- PyTorch cu130 works fine on CUDA 13.1 (backward compatible)
-- cu130 is preferred over cu128 — avoids ComfyUI's "no CUDA 13" warning and enables comfy_kitchen CUDA backend optimizations
+### Known Quality Issues (from Vision Analysis)
 
-**Flash Attention:**
-- NEVER compile flash-attn from source (OOMs due to systemd-oomd killing processes at 50% memory pressure)
-- Use the prebuilt wheel: `flash_attn-2.8.1+cu12torch2.10cxx11abiTRUE-cp312-cp312-linux_x86_64.whl` from the flash-attention v2.8.1 GitHub release
-- Requires `nvidia-cuda-runtime-cu12` alongside cu130 PyTorch — provides `libcudart.so.12` that the wheel expects
-
-**ComfyUI Flags:**
-- `--use-flash-attention` — uses the flash_attn package for attention
-- `--dont-upcast-attention` — prevents unnecessary fp32 cast
-- `--port 8465` — user's preferred port
-- `PYTHONWARNINGS="ignore::FutureWarning,ignore::SyntaxWarning"` — suppresses pynvml/groundingdino noise
-
-**Package Manager:** `uv` throughout. `uv venv --python 3.12` to create venv, `uv pip install` for packages, `uv run` to execute. No venv activation needed.
-
-### Broken Custom Nodes (upstream bugs)
-
-- ComfyUI-MagCache — REMOVED, broken import, ComfyUI API changed
-- ComfyUI-QwenVL — REMOVED, incompatible with transformers 5.x
-- comfyui-rmbg/SDMatte — bad relative imports (loads 44 nodes fine, 2 sub-modules fail)
-- comfyui-segment-anything-2 — pyproject.toml build conflicts, skipped in setup
+| Issue | Severity | Suggested Fix |
+|-------|----------|---------------|
+| Hand/foot missing from skeletons | High | Add hand detector or switch to DWPose for non-anime |
+| Facial distortion in VNCCS edits | Medium | Increase steps 30→40, or add inpainting pass |
+| Background warping near character | Medium | Increase padding or use larger canvas |
+| Q4 softness in LTX video output | Low | Higher quantization or post-sharpen |
+| Hallucinated text on buildings | Low | Add negative prompt targeting text/signs |
 
 ---
 
-## Pose Director Architecture
+## MCP Tools (Comfy-Cozy)
 
-### End-to-End Pipeline
+The ComfyUI Agent MCP server is configured in `.mcp.json` at project root. It provides 114 tools for autonomous ComfyUI workflow management.
 
-The full anime scene creation pipeline has 6 stages. Our extension handles step C.
+### Quick Reference
+
+| Task | Tool | Notes |
+|------|------|-------|
+| Check connection | `comfyui_agent_ping` | Always call first |
+| Load workflow | `load_workflow` | Accepts absolute path |
+| See what you can change | `get_editable_fields` | Groups by node type |
+| Change a value | `set_input` or `apply_workflow_patch` | Patch supports bulk changes |
+| Add a node | `add_node` + `connect_nodes` | Two-step process |
+| Validate before run | `validate_before_execute` | Catches errors early |
+| Run workflow | `execute_workflow` | Returns output filenames |
+| Run with progress | `execute_with_progress` | Real-time updates, better for long renders |
+| Get output path | `get_output_path` | Resolve filename → absolute path |
+| Analyze image quality | `analyze_image` | Returns quality score + artifacts + suggestions |
+| Compare two outputs | `compare_outputs` | A/B diff with change description |
+| Find models/nodes | `discover` | Searches local + CivitAI + HuggingFace |
+| Get node schema | `get_node_info` | Exact inputs/outputs/defaults |
+| Check GPU/VRAM | `get_system_stats` | GPU name, VRAM usage, loaded models |
+| Record what happened | `record_outcome` | Logs params + quality for learning |
+| Save session state | `save_session` | Persists across conversations |
+
+### ComfyUI Connection
+- ComfyUI runs on `127.0.0.1:8465`
+- Start: `bash ~/Documents/programs/img/comfyui-setup/run.sh`
+- MCP config in `.mcp.json` (project-level) and `~/.claude/settings.json` (global fallback)
+
+---
+
+## End-to-End Pipeline
 
 ```
-A. Character Concept    Z-Image → initial character design
-B. Character Sheet      Qwen Image Edit → full-body turnaround sheet
+A. Character Concept    Z-Image Turbo (768x1024) → character.png
+B. Character Sheet      VNCCS QWEN Edit → turnaround sheet (not yet implemented)
 C. Pose Manipulation    OpenposePreprocessor → PoseManipulator/MotionDirector → skeleton keyframes  ← THIS EXTENSION
-D. Video Generation     LTX Video 2.3 with keyframe guides → animated clips
-E. Post-Processing      LTX EditAnything IC-LoRA → fix artifacts, add/remove elements
-F. Lip Sync + Final     (future) → final composited scene
+D. Pose → Character     VNCCS_QWEN_Encoder(image1=char, image2=skeleton) → edited keyframes
+E. Video Assembly       LTX Video 2.3 with keyframe guides → MP4
+F. Post-Processing      LTX EditAnything IC-LoRA → fix artifacts
+G. Lip Sync             InfiniteTalk (not yet installed)
 ```
 
-### Static Pose Workflow (single keyframe)
-```
-LoadImage → OpenposePreprocessor → PoseManipulator(Gemini) → skeleton IMAGE
-                                                      ↓
-CheckpointLoader + CLIPLoader(qwenedit) + VAELoader(qwenedit-vae)
-                                                      ↓
-VNCCS_QWEN_Encoder(image1=character, image2=skeleton, prompt, instruction)
-                                                      ↓
-KSampler → VAEDecode → SaveImage (pose-edited character)
-```
+### Workflow Files
 
-### Motion Keyframe Workflow (multiple keyframes)
-```
-LoadImage → OpenposePreprocessor → MotionDirector(Gemini, N=4 keyframes) → IMAGE batch
-                                                                ↓
-ImpactImageBatchToImageList (split batch into individual images)
-                                                                ↓
-For EACH keyframe:
-  VNCCS_QWEN_Encoder(image1=character, image2=keyframe_skeleton) → KSampler → VAEDecode → SaveImage
-                                                                ↓
-For LTX Video:
-  Load each saved keyframe → LTXVAddGuideAdvanced(frame_idx=0,8,16,24)
-  → LTXVSampler → VAEDecode → VideoCombine
-```
+| File | Stage | Description |
+|------|-------|-------------|
+| `00_z_image_character.json` | A | Z-Image Turbo character generation |
+| `01_pose_manipulation.json` | C | Standalone OpenPose → PoseManipulator |
+| `02_motion_keyframes.json` | C | Standalone OpenPose → MotionDirector |
+| `03_static_pose_qwen_edit.json` | C+D | Full static pose pipeline with VNCCS |
+| `04_motion_keyframes_qwen_edit.json` | C+D | Motion keyframes with VNCCS editing |
+| `05_ltx_video_assembly.json` | E | LTX Video 2.3 with keyframe guides |
+| `06_ltx_edit_anything_postprocess.json` | F | Post-processing with IC-LoRA |
+| `07_lip_sync.json` | G | Lip sync (placeholder) |
 
-### LTX EditAnything Post-Processing (Step E)
-After generating video, use LTX EditAnything IC-LoRA for fixes:
-- **LoRA model**: `ltx23_edit_anything_global_rank128_v1_9000steps_adamw.safetensors`
-- **Source**: Alissonerdx/LTX-LoRAs on HuggingFace
-- **Load via**: `LTXICLoRALoaderModelOnly` node
-- **Prompt patterns**: "Add [object]", "Remove [object]", "Replace [X] with [Y]", "Convert [X] to [Y]"
-- **Use for**: fixing artifacts, adding/removing scene elements, style adjustments
+All workflows are in **ComfyUI UI format** (not API format). The E2E tests construct API-format payloads directly in Python.
 
-### Nodes
-1. **PoseManipulator** — Takes an existing OpenPose skeleton + text prompt → LLM recalculates joint positions → outputs modified skeleton image.
-2. **MotionDirector** — Takes a starting pose + text description of movement → LLM generates keyframes (not every frame, just anchors at evenly spaced frame numbers) → outputs batch of OpenPose skeleton images.
-3. **PoseRenderer** — Converts OpenPose keypoints JSON into a skeleton image. Standalone renderer, also used internally by the other two nodes.
-4. **PoseExtractor** — Bridge node: extracts body keypoints from OpenposePreprocessor's POSE_KEYPOINT output into flat JSON. Handles coordinate denormalization (0-1 → pixel).
+---
+
+## Architecture
+
+### Nodes (5 registered)
+1. **PoseManipulator** — OpenPose skeleton + text prompt → LLM recalculates joints → modified skeleton IMAGE
+2. **MotionDirector** — Starting pose + movement description → LLM generates N keyframes → IMAGE batch
+3. **PoseRenderer** — OpenPose keypoints JSON → color-coded skeleton image
+4. **PoseExtractor** — POSE_KEYPOINT from OpenposePreprocessor → flat JSON (handles denormalization)
+5. **KeyframeReviewer** — IMAGE batch → vision LLM review (consistency score, passed/failed)
 
 ### Key Design Decisions
-- **Keyframes only, not full animation.** LTX 2.3 handles interpolation between anchor frames natively. The LLM just needs to produce 3-5 key poses.
-- **OpenAI-compatible API.** Uses the `openai` Python package. Works with any provider (Ollama, LM Studio, LiteLLM proxy, OpenAI). Each node takes `base_url`, `api_key`, and `model` as inputs.
-- **POSE_KEYPOINT compatibility.** Nodes accept both STRING (JSON) and POSE_KEYPOINT (from OpenposePreprocessor) as input. The `extract_keypoints_from_dwpose()` utility handles all output formats and auto-converts normalized coordinates (0-1 range from OpenposePreprocessor) to pixel coordinates.
-- **Use OpenposePreprocessor, NOT DWPreprocessor.** DWPose's YOLOX person detector fails on anime images. The regular OpenposePreprocessor detects 18/18 keypoints on anime characters. OpenposePreprocessor returns normalized (0-1) coordinates; PoseExtractor auto-denormalizes them to pixel coordinates using canvas dimensions.
-- **Portrait dimensions for full-body.** Z-Image character generation should use 768x1024 (portrait) to produce full-body characters. Square 1024x1024 produces bust crops.
-- **Robust LLM parsing.** `parse_llm_json()` in `utils/json_parser.py` handles direct JSON, markdown-wrapped responses, trailing commas, and embedded JSON extraction.
-- **Retry logic.** API client retries on timeout, connection errors, and rate limits (429/503) with exponential backoff.
+- **Keyframes only, not full animation.** LTX 2.3 interpolates between anchor frames.
+- **OpenAI-compatible API.** Works with any provider (llama.cpp, LiteLLM, OpenAI). Each node takes `base_url`, `api_key`, `model`.
+- **Use OpenposePreprocessor, NOT DWPreprocessor.** DWPose's YOLOX fails on anime.
+- **Portrait for full-body.** Z-Image at 768x1024 for head-to-toe characters.
+- **Robust LLM parsing.** `parse_llm_json()` handles direct JSON, markdown-wrapped, trailing commas, embedded extraction.
 
-### LLM Infrastructure
-- **LiteLLM proxy**: `http://litellm.local/v1`, key `sk-litellm-e2e-test-master-key`
-- **llama.cpp**: `http://llama.local/v1` (via Traefik)
-- **Services managed by**: `~/Documents/programs/shared-docker-infra/` (Taskfile: `task up`)
-- **Available models**: qwen-35-9b, qwen-35-27-vision, gemma-4-26b, etc. (see LiteLLM config.yaml)
+### LLM Setup
+- **Primary**: Qwen3.6-35B-A3B via llama.cpp (`http://127.0.0.1:8001/v1`)
+  - Docker container `orchestrator-llama`, model `qwen3.6-35b-a3b`
+  - MoE 35B total / 3B active, ~86 tok/s, thinking mode enabled
+  - API key: `sk-no-key-required`
+- **Fallback**: Gemini 2.5 Flash (free tier, 20 req/day)
+- **Vision**: `call_llm_vision()` in api_client.py — base64 PNG via OpenAI chat format
+
+### VNCCS Pattern (Critical)
+Character consistency uses **reference latents**, NOT ControlNet:
+- VNCCS_QWEN_Encoder VAE-encodes character + skeleton as reference latents
+- Injects at timestep zero (`reference_latents_method = "index_timestep_zero"`)
+- Quadratic weighting: `(weight^2 * latent)` per image
+- Key params: `image1_name`, `image2_name`, `weight1`, `weight2`, `target_size`, `vl_size`, `instruction`, `qwen_2511`
+- **Always verify params against live schema**: `get_node_info("VNCCS_QWEN_Encoder")`
+
+### LTX Video 2.3 Setup
+- **UNET**: `ltx-2.3-22b-distilled-1.1-UD-Q4_K_M.gguf` (16.4GB) via UnetLoaderGGUF
+- **Text Encoder**: Gemma 3 12B via LTXVGemmaCLIPModelLoader
+  - Also needs: `ltx-2.3_text_projection_bf16.safetensors` + `ltx-2.3-connectors-textproj.safetensors`
+- **VAE (full)**: `LTX23_video_vae_bf16.safetensors` (1.45GB) — required for LTXVAddGuideAdvanced
+- **VAE (tiny)**: `taeltx2_3.safetensors` (TAEHV) — fast but INCOMPATIBLE with guide injection
+- **Latent**: `EmptyLTXVLatentVideo` (5D tensor, NOT EmptyLatentImage)
+- **Keyframe injection**: `LTXVAddGuideAdvanced` chains at frame_idx (must be divisible by 8)
+
+---
 
 ## Development
 
-### Setup
+### Paths
+- **Source**: `/home/ubuntu/Documents/programs/img/comfyui-pose-director`
+- **Installed**: `/home/ubuntu/Documents/programs/img/comfyui/custom_nodes/comfyui-pose-director` (full copy, rsync from source)
+- **ComfyUI**: `/home/ubuntu/Documents/programs/img/comfyui` (port 8465)
+- **Shared models**: `/home/ubuntu/Documents/programs/shared-docker-infra/models/image-gen/comfyui`
+- **Output**: `/home/ubuntu/Documents/programs/img/comfyui/output/e2e/`
+
+### After Code Changes
 ```bash
-# Symlink into ComfyUI
-ln -s /path/to/comfyui-pose-director /path/to/ComfyUI/custom_nodes/comfyui-pose-director
+rsync -av --delete --exclude='__pycache__' /home/ubuntu/Documents/programs/img/comfyui-pose-director/ /home/ubuntu/Documents/programs/img/comfyui/custom_nodes/comfyui-pose-director/
+# Then restart ComfyUI
 ```
 
 ### Testing
 ```bash
-# Start ComfyUI
-bash /path/to/comfyui-setup/run.sh
+# Unit tests (no ComfyUI needed)
+uv run pytest tests/unit/ -v
 
-# Trigger a workflow via API
-curl -X POST http://127.0.0.1:8465/prompt -d @test_workflow.json
+# Integration tests (ComfyUI + LLM needed)
+uv run pytest tests/integration/ -v
+
+# E2E full pipeline (~17 min, requires ComfyUI + llama.cpp + all models)
+RUN_E2E=1 uv run pytest tests/e2e/ -v -s
 ```
 
-### Node Structure
-Each node is a Python class with:
-- `INPUT_TYPES` — class method defining inputs
-- `RETURN_TYPES` — tuple of output types
-- `FUNCTION` — string name of the execute method
-- `CATEGORY` — where it appears in the ComfyUI menu (`pose_director`)
+### Environment
+- RTX 4090 (24GB VRAM), CUDA 13.1, Ubuntu, 62GB RAM
+- Python 3.12 via `uv` (system Python is 3.14, too new)
+- PyTorch 2.10.0+cu130
+- Flash Attention via prebuilt wheel (NEVER compile from source — systemd-oomd kills at 50% memory)
 
-### Adding a New Node
-1. Create `nodes/your_node.py` with a class following the ComfyUI pattern
-2. Import it in `__init__.py` and add to `NODE_CLASS_MAPPINGS` / `NODE_DISPLAY_NAME_MAPPINGS`
-3. Any shared utilities go in `utils/`
+### Setup Script
+`~/Documents/programs/img/comfyui-setup/setup_comfyui.sh` installs a complete ComfyUI environment:
+```bash
+bash setup_comfyui.sh --models /home/ubuntu/Documents/programs/shared-docker-infra/models/image-gen/comfyui [install_dir]
+```
+Launch with: `bash ~/Documents/programs/img/comfyui-setup/run.sh`
+
+---
 
 ## OpenPose Format
-Standard COCO-18, 18 keypoints per person as flat array `[x, y, confidence, ...]`:
+COCO-18, 18 keypoints as flat array `[x, y, confidence, ...]`:
 ```
-[0]  Nose          [1]  Neck
-[2]  R Shoulder    [5]  L Shoulder
-[3]  R Elbow       [6]  L Elbow
-[4]  R Wrist       [7]  L Wrist
-[8]  R Hip         [11] L Hip
-[9]  R Knee        [12] L Knee
-[10] R Ankle       [13] L Ankle
-[14] R Eye         [15] L Eye
-[16] R Ear         [17] L Ear
+[0] Nose  [1] Neck  [2] R Shoulder  [5] L Shoulder
+[3] R Elbow  [6] L Elbow  [4] R Wrist  [7] L Wrist
+[8] R Hip  [11] L Hip  [9] R Knee  [12] L Knee
+[10] R Ankle  [13] L Ankle  [14] R Eye  [15] L Eye
+[16] R Ear  [17] L Ear
 ```
 
-## Project Structure
-```
-comfyui-pose-director/
-├── __init__.py              # Registers nodes with ComfyUI
-├── pyproject.toml           # Dependencies: openai>=1.0
-├── nodes/
-│   ├── pose_manipulator.py  # Static pose manipulation via LLM
-│   ├── motion_director.py   # Keyframe generation via LLM
-│   └── pose_renderer.py     # OpenPose JSON → color-coded skeleton image
-├── utils/
-│   ├── openpose.py          # Keypoint names, bone pairs, body part groups, colors
-│   ├── api_client.py        # OpenAI-compatible API client with retry logic
-│   └── json_parser.py       # Robust JSON extraction from LLM responses
-├── ARCHITECTURE.md          # Full pipeline architecture and implementation plan
-└── CLAUDE.md
-```
-
-### Impact Pack Batch Conversion
-The MotionDirector outputs a batch of skeleton images, but VNCCS_QWEN_Encoder processes one image at a time. Use Impact Pack nodes for conversion:
-- `ImpactImageBatchToImageList` — splits batch tensor into list of single images (`OUTPUT_IS_LIST = (True,)`)
-- `ImageListToImageBatch` — merges list back into batch
-- Located in: `comfyui-impact-pack/modules/impact/util_nodes.py`
-
-### VNCCS Reference Latent Pattern (Critical)
-Character consistency comes from the **reference latent** approach, NOT ControlNet:
-- VNCCS_QWEN_Encoder VAE-encodes both the character image and pose skeleton as reference latents
-- Injects at timestep zero via `reference_latents_method = "index_timestep_zero"`
-- Uses quadratic weighting: `(weight^2 * latent)` per image
-- Settings: `image1=character (weight 1.0)`, `image2=pose_skeleton (weight 1.0)`, `qwen_2511=True`
-- Credit: AHEKOT/MiuProject, https://github.com/AHEKOT/ComfyUI_VNCCS, MIT license
-
-## External Extensions (installed in ComfyUI)
-- `comfyui_controlnet_aux` — OpenPose extraction (use `OpenposePreprocessor`, NOT `DWPreprocessor` — DWPose fails on anime), returns `(IMAGE, POSE_KEYPOINT)`
-- `qweneditutils` — Qwen Image Edit nodes, takes CLIP + VAE + images + prompt
-- `ComfyUI-LTXVideo@nightly` — LTX Video 2.3 (**ENABLED**)
+## External Extensions
+- `comfyui_controlnet_aux` — OpenPose extraction (`OpenposePreprocessor` only)
+- `ComfyUI-GGUF` — GGUF model loading (UNET, CLIP)
+- `ComfyUI-LTXVideo@nightly` — LTX Video 2.3
+- `vnccs` / `vnccs-utils` — VNCCS QWEN encoder for character consistency
+- `qweneditutils` — Qwen Image Edit utilities
+- `comfyui-impact-pack` — Batch/list conversion (`ImpactImageBatchToImageList`)
 - `comfyui-videohelpersuite` — Video combine/encode
-- `vnccs` / `vnccs-utils` — Visual Novel Character Creator Suite with QWEN encoder
-- `comfyui-impact-pack` — Batch/list conversion nodes (`ImpactImageBatchToImageList`)
 
-## LTX EditAnything IC-LoRA (Post-Processing)
-- **Model**: `ltx23_edit_anything_global_rank128_v1_9000steps_adamw.safetensors`
-- **Author**: Alissonerdx
-- **Source**: https://huggingface.co/Alissonerdx/LTX-LoRAs
-- **Load via**: `LTXICLoRALoaderModelOnly` node
-- **Prompt patterns**: "Add [X]", "Remove [X]", "Replace [X] with [Y]", "Convert [X] to [Y]"
-- **Purpose**: Fix video artifacts, add/remove scene elements, style adjustments
-- **Place in**: `shared-docker-infra/models/image-gen/comfyui/loras/`
-
-## Reference Extensions (cloned for study)
-- `/tmp/comfyui-openpose-studio/` — Visual pose editor, POSE_KEYPOINT patterns
-- `/tmp/comfyui-llm-party/` — LLM API integration patterns
+## Broken Custom Nodes (upstream bugs)
+- ComfyUI-MagCache — REMOVED, broken import
+- ComfyUI-QwenVL — REMOVED, incompatible with transformers 5.x
+- comfyui-rmbg/SDMatte — bad relative imports (44 nodes load, 2 sub-modules fail)
+- comfyui-segment-anything-2 — pyproject.toml build conflicts

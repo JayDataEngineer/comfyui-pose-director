@@ -4,7 +4,7 @@ import json
 
 from ..utils.api_client import call_llm
 from ..utils.json_parser import parse_llm_json, extract_keypoints_from_dwpose
-from ..utils.skeleton_validator import validate_keypoints
+from ..utils.skeleton_validator import validate_keypoints, sanitize_keypoints
 from .pose_renderer import PoseRendererNode
 
 SYSTEM_PROMPT = """You are a pose manipulation assistant. You receive OpenPose keypoint data for a person and a text instruction describing how to modify their pose.
@@ -82,6 +82,9 @@ Instruction: {instruction}"""
 
         new_kpts = parse_llm_json(response)
         new_kpts_json = json.dumps(new_kpts)
+
+        # Sanitize overlapping joints before rendering
+        new_kpts = sanitize_keypoints(new_kpts, width, height)
 
         # Soft validation: log anatomical issues but don't block
         is_valid, issues = validate_keypoints(new_kpts, width, height)

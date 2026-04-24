@@ -5,6 +5,7 @@ import pytest
 from pose_director_root.utils.skeleton_validator import (
     validate_keypoints,
     validate_keyframe_consistency,
+    sanitize_keypoints,
     ValidationIssue,
 )
 
@@ -141,3 +142,59 @@ class TestValidateKeyframeConsistency:
         result = validate_keyframe_consistency([kpts])
         assert result["is_consistent"]
         assert result["max_variance"] == 0.0
+
+
+class TestJointOverlap:
+    """Tests for joint overlap detection and sanitization."""
+
+    def test_overlapping_joints_detected(self):
+        """Two connected joints at the same position should be flagged."""
+        kpts = make_valid_keypoints()
+        # Place RElbow (3) and RWrist (4) at the same position
+        kpts[4 * 3] = kpts[3 * 3]       # RWrist x = RElbow x
+        kpts[4 * 3 + 1] = kpts[3 * 3 + 1]  # RWrist y = RElbow y
+        _, issues = validate_keypoints(kpts, 1024, 1024)
+        overlap_issues = [i for i in issues if i.category == "overlap"]
+        assert len(overlap_issues) >= 1
+
+    def test_no_overlap_for_normal_pose(self):
+        """Normal pose should have no overlap warnings."""
+        kpts = make_valid_keypoints()
+        _, issues = validate_keypoints(kpts, 1024, 1024)
+        overlap_issues = [i for i in issues if i.category == "overlap"]
+        assert len(overlap_issues) == 0
+
+    def test_sanitize_pushes_overlapping_apart(self):
+        """sanitize_keypoints should push overlapping joints apart."""
+        kpts = make_valid_keypoints()
+        # Collapse RElbow and RWrist to same point
+        kpts[4 * 3] = kpts[3 * 3]
+        kpts[4 * 3 + 1] = kpts[3 * 3 + 1]
+
+        result = sanitize_keypoints(kpts, 1024, 1024)
+        # After sanitization, the distance should be >= min_bone_length
+        ax, ay = result[3 * 3], result[3 * 3 + 1]
+        bx, by = result[4 * 3], result[4 * 3 + 1]
+        dist = ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5
+        assert dist > 0  # no longer overlapping
+
+    def test_sanitize_preserves_non_overlapping(self):
+        """Non-overlapping joints should not be changed."""
+        kpts = make_valid_keypoints()
+        result = sanitize_keypoints(kpts, 1024, 1024)
+        # Should be identical (no overlaps to fix)
+        for i in range(len(kpts)):
+            assert abs(result[i] - kpts[i]) < 0.01
+
+    def test_sanitize_does_not_mutate_input(self):
+        """Should return a new list, not modify the input."""
+        kpts = make_valid_keypoints()
+        original = list(kpts)
+        # Collapse a pair
+        kpts[4 * 3] = kpts[3 * 3]
+        kpts[4 * 3 + 1] = kpts[3 * 3 + 1]
+        original_collapsed = list(kpts)
+
+        sanitize_keypoints(kpts, 1024, 1024)
+        # Input should still be collapsed
+        assert kpts == original_collapsed

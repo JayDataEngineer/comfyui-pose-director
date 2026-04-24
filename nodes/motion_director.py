@@ -6,7 +6,7 @@ import torch
 
 from ..utils.api_client import call_llm
 from ..utils.json_parser import parse_llm_json, extract_keypoints_from_dwpose
-from ..utils.skeleton_validator import validate_keypoints, validate_keyframe_consistency
+from ..utils.skeleton_validator import validate_keypoints, validate_keyframe_consistency, sanitize_keypoints
 from .pose_renderer import PoseRendererNode
 
 
@@ -133,7 +133,8 @@ Target frame numbers: {target_frames}"""
         renderer = PoseRendererNode()
         images = []
         for kf in keyframes:
-            kf_kpts = kf["keypoints"]
+            kf_kpts = sanitize_keypoints(kf["keypoints"], width, height)
+            kf["keypoints"] = kf_kpts  # update for downstream use
             render_input = json.dumps([{"pose_keypoints_2d": kf_kpts}])
             (img_tensor,) = renderer.render(render_input, width, height, 4, 6)
             images.append(img_tensor)

@@ -60,6 +60,7 @@ def validate_keypoints(keypoints: list, width: int, height: int) -> tuple[bool, 
     issues.extend(_check_joint_angles(keypoints))
     issues.extend(_check_balance(keypoints, width))
     issues.extend(_check_confidence_gaps(keypoints))
+    issues.extend(_check_joint_overlap(keypoints, min(width, height)))
 
     is_valid = not any(i.severity == "error" for i in issues)
     return is_valid, issues
@@ -246,3 +247,85 @@ def _check_confidence_gaps(keypoints: list) -> list[ValidationIssue]:
                 f"but connected {KEYPOINT_NAMES.get(idx_b, idx_b)} is confident ({cb:.2f})",
                 [idx_a, idx_b]))
     return issues
+
+
+# Minimum pixel distance between connected joints (fraction of canvas min dimension)
+_OVERLAP_THRESHOLD = 0.02  # 2% of canvas min dimension
+
+# Bones that are naturally short — skip sanitization for these
+_SHORT_BONES = frozenset([
+    (0, 1),    # Nose → Neck
+    (0, 14),   # Nose → REye
+    (14, 16),  # REye → REar
+    (0, 15),   # Nose → LEye
+    (15, 17),  # LEye → LEar
+])
+
+
+def _check_joint_overlap(keypoints: list, canvas_min_dim: int) -> list[ValidationIssue]:
+    """Flag bone-connected joints that are too close together (overlap/ghosting).
+
+    This catches the "double imagery" artifact where the LLM places two
+    connected joints at nearly the same pixel, causing VNCCS to produce
+    ghosting/distortion. Only checks limb bones (skips short head/face bones).
+    """
+    min_dist = canvas_min_dim * _OVERLAP_THRESHOLD
+    issues = []
+    for idx_a, idx_b in SKELETON_BONES:
+        if (idx_a, idx_b) in _SHORT_BONES:
+            continue
+        ca = keypoints[idx_a * 3 + 2]
+        cb = keypoints[idx_b * 3 + 2]
+        if ca < 0.1 or cb < 0.1:
+            continue
+        ax, ay = keypoints[idx_a * 3], keypoints[idx_a * 3 + 1]
+        bx, by = keypoints[idx_b * 3], keypoints[idx_b * 3 + 1]
+        dist = math.sqrt((ax - bx) ** 2 + (ay - by) ** 2)
+        if dist < min_dist:
+            name_a = KEYPOINT_NAMES.get(idx_a, idx_a)
+            name_b = KEYPOINT_NAMES.get(idx_b, idx_b)
+            issues.append(ValidationIssue("warning", "overlap",
+                f"{name_a} and {name_b} overlap (dist={dist:.1f}px < min={min_dist:.1f}px)",
+                [idx_a, idx_b]))
+    return issues
+
+
+def sanitize_keypoints(keypoints: list, width: int, height: int) -> list:
+    """Push overlapping connected joints apart to prevent VNCCS ghosting.
+
+    For each bone in SKELETON_BONES, if the two endpoints are closer than
+    min_bone_length, pushes them apart along the bone axis. Preserves the
+    midpoint and total extent — only redistributes the endpoints.
+
+    Returns a new keypoint array (does not mutate input).
+    """
+    min_bone_length = min(width, height) * _OVERLAP_THRESHOLD * 2
+    result = list(keypoints)
+
+    for idx_a, idx_b in SKELETON_BONES:
+        if (idx_a, idx_b) in _SHORT_BONES:
+            continue
+        base_a, base_b = idx_a * 3, idx_b * 3
+        ca, cb = result[base_a + 2], result[base_b + 2]
+        if ca < 0.1 or cb < 0.1:
+            continue
+
+        ax, ay = result[base_a], result[base_a + 1]
+        bx, by = result[base_b], result[base_b + 1]
+        dist = math.sqrt((ax - bx) ** 2 + (ay - by) ** 2)
+
+        if dist < min_bone_length:
+            # Direction vector (or default downward if coincident)
+            if dist > 0:
+                dx, dy = (bx - ax) / dist, (by - ay) / dist
+            else:
+                dx, dy = 0, 1  # push vertically
+            # Push apart symmetrically around midpoint
+            push = min_bone_length / 2
+            mid_x, mid_y = (ax + bx) / 2, (ay + by) / 2
+            result[base_a] = mid_x - dx * push
+            result[base_a + 1] = mid_y - dy * push
+            result[base_b] = mid_x + dx * push
+            result[base_b + 1] = mid_y + dy * push
+
+    return result

@@ -10,6 +10,7 @@ Skipped unless RUN_E2E=1 env var is set.
 """
 
 import io
+import tempfile
 
 import pytest
 from PIL import Image
@@ -26,6 +27,7 @@ from pipeline.workflows import (
     VNCCS_PROMPT,
     VNCCS_INSTRUCTION,
 )
+from pose_director_root.utils.temporal_analysis import analyze_temporal_stability
 
 pytestmark = [pytest.mark.e2e, pytest.mark.requires_api_key]
 
@@ -151,3 +153,26 @@ def test_e2e_video_is_mp4(e2e_result):
         pytest.skip("No video output")
     assert len(video) > 8
     assert b'ftyp' in video[:32], "Video doesn't appear to be a valid MP4"
+
+
+def test_e2e_temporal_stability(e2e_result):
+    """Video should have reasonable temporal stability (low flicker)."""
+    video = get_output_video(e2e_result["outputs"], "16")
+    if video is None:
+        pytest.skip("No video output")
+
+    # Write video to temp file for ffmpeg analysis
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+        f.write(video)
+        tmp_path = f.name
+
+    try:
+        result = analyze_temporal_stability(tmp_path, threshold=0.85)
+        print(f"[E2E] Temporal stability: score={result['stability_score']:.3f}, "
+              f"frames={result['total_frames']}, flicker={result['flicker_frames']}")
+        assert result["stability_score"] > 0.5, (
+            f"Temporal stability too low: {result['stability_score']:.3f}"
+        )
+    finally:
+        import os
+        os.unlink(tmp_path)

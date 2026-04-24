@@ -231,7 +231,7 @@ class TestBuildLtxVideoWorkflow:
         assert ks["inputs"]["cfg"] == 1.0
 
     def test_default_prompt_has_no_text_instruction(self):
-        """Prompt should contain anti-text instruction (no negative prompt for distill)."""
+        """Prompt should contain anti-text instruction."""
         assert "no text" in DEFAULT_LTX_PROMPT.lower()
 
     def test_video_combine_node(self):

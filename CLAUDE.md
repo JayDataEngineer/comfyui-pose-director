@@ -133,15 +133,19 @@ All workflows are in **ComfyUI UI format** (not API format). The E2E tests const
 
 ## Architecture
 
-### Nodes (5 registered)
+### Nodes (8 registered)
 1. **PoseManipulator** — OpenPose skeleton + text prompt → LLM recalculates joints → modified skeleton IMAGE
 2. **MotionDirector** — Starting pose + movement description → LLM generates N keyframes → IMAGE batch
 3. **PoseRenderer** — OpenPose keypoints JSON → color-coded skeleton image
 4. **PoseExtractor** — POSE_KEYPOINT from OpenposePreprocessor → flat JSON (handles denormalization)
 5. **KeyframeReviewer** — IMAGE batch → vision LLM review (consistency score, passed/failed)
+6. **BodyMeshRenderer** — Named joint rotations → Anny forward pass → 3D mesh render
+7. **AnimationExporter** — Keyframe rotations → SLERP interpolation → BVH file + MP4/GIF preview
+8. **PromptEnhancer** — Simple prompt → detailed Z-Image prompt
 
 ### Key Design Decisions
-- **Keyframes only, not full animation.** LTX 2.3 interpolates between anchor frames.
+- **SLERP interpolation for smooth animation.** scipy quaternion SLERP between keyframes, exported as BVH (game engines) and MP4/GIF (preview).
+- **BVH uses independent 15-bone hierarchy.** Not tied to Anny's 163 bones — game engines re-target anyway.
 - **OpenAI-compatible API.** Works with any provider (llama.cpp, LiteLLM, OpenAI). Each node takes `base_url`, `api_key`, `model`.
 - **Use OpenposePreprocessor, NOT DWPreprocessor.** DWPose's YOLOX fails on anime.
 - **Portrait for full-body.** Z-Image at 768x1024 for head-to-toe characters.

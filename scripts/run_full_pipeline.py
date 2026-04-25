@@ -197,14 +197,14 @@ def stage_c_keyframes(character_png: bytes, run_dir: Path) -> list:
             "api_key": llm_key,
             "model": llm_model,
         },
-        "SaveImage": {"filename_prefix": "pipeline/keyframes"},
+        "PreviewImage": {"filename_prefix": "pipeline/keyframes"},
     })
 
     api = convert_ui_to_api(workflow)
     result = submit_workflow(api)
 
-    # Find the SaveImage/PreviewImage node
-    save_node = next(n for n in workflow["nodes"] if n["type"] in ("SaveImage", "PreviewImage"))
+    # Find the first PreviewImage node (keyframe output, node 4)
+    save_node = next(n for n in workflow["nodes"] if n["type"] == "PreviewImage")
     save_node_id = str(save_node["id"])
     images = get_output_images(result["outputs"], save_node_id)
     log(f"Generated {len(images)} keyframe images")

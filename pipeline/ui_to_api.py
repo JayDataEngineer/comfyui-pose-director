@@ -188,6 +188,12 @@ UI_ONLY_WIDGETS: dict[str, dict[int, str]] = {
     "KSampler": {1: "control_after_generate"},
 }
 
+# Default values for required inputs that ComfyUI's UI may omit from widgets_values.
+# These are filled in when the widget value is missing during conversion.
+NODE_DEFAULTS: dict[str, dict[str, Any]] = {
+    "KSampler": {"denoise": 1.0},
+}
+
 
 def _build_link_map(links: list[list]) -> dict[int, tuple[int, int]]:
     """Build lookup: link_id -> (source_node_id, source_output_index).
@@ -206,6 +212,7 @@ def _convert_generic(node: dict, link_map: dict[int, tuple[int, int]]) -> dict:
     node_type = node.get("type", "")
     schema = NODE_SCHEMAS.get(node_type, [])
     ui_only = UI_ONLY_WIDGETS.get(node_type, {})
+    defaults = NODE_DEFAULTS.get(node_type, {})
 
     inputs: dict[str, Any] = {}
     widgets = list(node.get("widgets_values", []))
@@ -227,12 +234,16 @@ def _convert_generic(node: dict, link_map: dict[int, tuple[int, int]]) -> dict:
                 if widget_idx < len(widgets):
                     inputs[input_name] = widgets[widget_idx]
                     widget_idx += 1
-                # else: omit — ComfyUI will use the default value
+                elif input_name in defaults:
+                    inputs[input_name] = defaults[input_name]
+                # else: omit — ComfyUI will use the node's built-in default
         else:
             # Hidden parameter (not listed in UI inputs array)
             if widget_idx < len(widgets):
                 inputs[input_name] = widgets[widget_idx]
                 widget_idx += 1
+            elif input_name in defaults:
+                inputs[input_name] = defaults[input_name]
 
     return {"class_type": node_type, "inputs": inputs}
 

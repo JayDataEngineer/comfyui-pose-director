@@ -1,6 +1,6 @@
 {
   "last_node_id": 10,
-  "last_link_id": 9,
+  "last_link_id": 10,
   "nodes": [
     {
       "id": 1,
@@ -78,8 +78,7 @@
           "name": "CLIP",
           "type": "CLIP",
           "links": [
-            2,
-            3
+            2
           ]
         }
       ]
@@ -185,7 +184,8 @@
           "name": "CONDITIONING",
           "type": "CONDITIONING",
           "links": [
-            5
+            5,
+            10
           ]
         }
       ]
@@ -206,7 +206,7 @@
         {
           "name": "conditioning",
           "type": "CONDITIONING",
-          "link": 3
+          "link": 10
         }
       ],
       "outputs": [
@@ -280,9 +280,9 @@
         8,
         1.0,
         "res_multistep",
-        "simple"
+        "simple",
+        1.0
       ],
-      "_comment": "Turbo settings: 8 steps, CFG 1.0, res_multistep sampler. For Z-Image Base: 50 steps, CFG 4.0, euler sampler, normal scheduler",
       "inputs": [
         {
           "name": "model",
@@ -423,12 +423,12 @@
       "CLIP"
     ],
     [
-      3,
-      2,
+      10,
+      5,
       0,
       6,
       0,
-      "CLIP"
+      "CONDITIONING"
     ],
     [
       4,

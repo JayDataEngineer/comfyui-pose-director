@@ -4,7 +4,9 @@ import base64
 import io
 import json
 import logging
+import os
 import time
+from pathlib import Path
 
 import torch
 from openai import OpenAI, APITimeoutError, APIConnectionError, APIStatusError
@@ -13,6 +15,94 @@ logger = logging.getLogger("comfyui-pose-director")
 
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_TIMEOUT = 300
+
+# Load .env on import so keys are available when running inside ComfyUI
+# (tests load it via conftest, so this is a no-op there)
+_ENV_FILE = Path(__file__).parent.parent / ".env"
+if _ENV_FILE.exists():
+    for _line in _ENV_FILE.read_text().splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _key, _, _val = _line.partition("=")
+            os.environ.setdefault(_key.strip(), _val.strip())
+
+# Map base_url patterns to environment variable names (checked in order)
+_PROVIDER_ENV_MAP = {
+    "openrouter": ["OPENROUTER_API_KEY"],
+    "generativelanguage": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+    "zai": ["ZAI_API_KEY"],
+    "localhost": ["LLM_API_KEY"],
+    "127.0.0.1": ["LLM_API_KEY"],
+}
+
+# Map base_url patterns to ComfyUI frontend setting IDs
+_PROVIDER_SETTINGS_MAP = {
+    "openrouter": ["PoseDirector.openrouterApiKey"],
+    "generativelanguage": ["PoseDirector.geminiApiKey"],
+}
+
+# Cached ComfyUI settings (loaded once, from user/default/comfy.settings.json)
+_comfy_settings = None
+
+
+def _load_comfy_settings():
+    """Load ComfyUI frontend settings from comfy.settings.json (cached)."""
+    global _comfy_settings
+    if _comfy_settings is not None:
+        return _comfy_settings
+
+    _comfy_settings = {}
+    try:
+        # ComfyUI stores settings at <comfyui_root>/user/default/comfy.settings.json
+        comfy_root = Path(__file__).parent.parent.parent.parent
+        settings_path = comfy_root / "user" / "default" / "comfy.settings.json"
+        if settings_path.exists():
+            with open(settings_path) as f:
+                _comfy_settings = json.load(f)
+    except Exception:
+        pass
+    return _comfy_settings
+
+
+def resolve_api_key(api_key: str, base_url: str = "") -> str:
+    """Resolve API key from env vars / settings when the widget value is empty.
+
+    Priority: widget value > provider env vars > ComfyUI settings > generic env vars.
+    Local endpoints (localhost/127.0.0.1) get a fallback "not-needed" key.
+    """
+    if api_key and api_key.strip():
+        return api_key.strip()
+
+    base_lower = (base_url or "").lower()
+
+    # 1. Provider-specific env vars
+    for pattern, env_vars in _PROVIDER_ENV_MAP.items():
+        if pattern in base_lower:
+            for var in env_vars:
+                val = os.environ.get(var, "")
+                if val:
+                    return val
+
+    # 2. ComfyUI frontend settings
+    settings = _load_comfy_settings()
+    for pattern, setting_ids in _PROVIDER_SETTINGS_MAP.items():
+        if pattern in base_lower:
+            for sid in setting_ids:
+                val = settings.get(sid, "")
+                if val:
+                    return val
+
+    # 3. Generic env var fallbacks
+    for var in ("POSE_DIRECTOR_API_KEY", "OPENAI_API_KEY", "LLM_API_KEY"):
+        val = os.environ.get(var, "")
+        if val:
+            return val
+
+    # Local models don't need a real key
+    if any(p in base_lower for p in ("localhost", "127.0.0.1")):
+        return "not-needed"
+
+    return api_key  # empty — will fail downstream with a clear auth error
 
 
 def _tensor_to_base64(image_tensor):
@@ -88,9 +178,10 @@ def call_llm(base_url, api_key, model, system_prompt, user_message,
     Returns:
         str: The assistant's response text
     """
+    resolved_key = resolve_api_key(api_key, base_url)
     client = OpenAI(
         base_url=base_url,
-        api_key=api_key or "not-needed",
+        api_key=resolved_key,
         timeout=timeout,
         max_retries=0,
     )
@@ -119,9 +210,10 @@ def call_llm_vision(base_url, api_key, model, system_prompt, text_prompt, images
     Returns:
         str: The assistant's response text
     """
+    resolved_key = resolve_api_key(api_key, base_url)
     client = OpenAI(
         base_url=base_url,
-        api_key=api_key or "not-needed",
+        api_key=resolved_key,
         timeout=timeout,
         max_retries=0,
     )

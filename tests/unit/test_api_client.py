@@ -1,5 +1,6 @@
 """Unit tests for API client with mocked OpenAI calls."""
 
+import os
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -7,6 +8,7 @@ import pytest
 from pose_director_root.utils.api_client import (
     call_llm,
     call_llm_vision,
+    resolve_api_key,
     _tensor_to_base64,
 )
 
@@ -49,24 +51,27 @@ class TestCallLlm:
         )
 
     @patch("pose_director_root.utils.api_client.OpenAI")
-    def test_call_llm_empty_key_uses_placeholder(self, mock_openai_cls):
+    def test_call_llm_empty_key_localhost_resolves(self, mock_openai_cls):
+        """Empty api_key with localhost URL resolves to 'not-needed'."""
         mock_client = MagicMock()
         mock_openai_cls.return_value = mock_client
         mock_client.chat.completions.create.return_value = _mock_response("ok")
 
-        call_llm(
-            base_url="http://localhost:11434/v1",
-            api_key="",
-            model="test",
-            system_prompt="sys",
-            user_message="hi",
-        )
-        mock_openai_cls.assert_called_once_with(
-            base_url="http://localhost:11434/v1",
-            api_key="not-needed",
-            timeout=300,
-            max_retries=0,
-        )
+        # Clear env vars so the resolver falls through to localhost fallback
+        with patch.dict(os.environ, {}, clear=True):
+            call_llm(
+                base_url="http://localhost:11434/v1",
+                api_key="",
+                model="test",
+                system_prompt="sys",
+                user_message="hi",
+            )
+            mock_openai_cls.assert_called_once_with(
+                base_url="http://localhost:11434/v1",
+                api_key="not-needed",
+                timeout=300,
+                max_retries=0,
+            )
 
     @patch("pose_director_root.utils.api_client.time")
     @patch("pose_director_root.utils.api_client.OpenAI")
@@ -340,3 +345,72 @@ class TestTensorToBase64:
         tensor = torch.zeros(32, 32, 3)
         result = _tensor_to_base64(tensor)
         assert len(result) > 0
+
+
+class TestResolveApiKey:
+    """Tests for resolve_api_key() env var fallback."""
+
+    def test_non_empty_widget_passes_through(self):
+        assert resolve_api_key("my-key", "https://api.openai.com/v1") == "my-key"
+
+    def test_whitespace_widget_passes_through(self):
+        assert resolve_api_key("  my-key  ", "https://api.openai.com/v1") == "my-key"
+
+    @patch.dict(os.environ, {"OPENROUTER_API_KEY": "or-key-123"}, clear=False)
+    def test_openrouter_env_fallback(self):
+        result = resolve_api_key("", "https://openrouter.ai/api/v1")
+        assert result == "or-key-123"
+
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "gem-key-456"}, clear=False)
+    def test_gemini_env_fallback(self):
+        result = resolve_api_key("", "https://generativelanguage.googleapis.com/v1beta/openai/")
+        assert result == "gem-key-456"
+
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "", "GOOGLE_API_KEY": "google-key"}, clear=False)
+    def test_gemini_secondary_env(self):
+        result = resolve_api_key("", "https://generativelanguage.googleapis.com/v1beta/openai/")
+        assert result == "google-key"
+
+    @patch.dict(os.environ, {"ZAI_API_KEY": "zai-key"}, clear=False)
+    def test_zai_env_fallback(self):
+        result = resolve_api_key("", "https://zai.api.com/v1")
+        assert result == "zai-key"
+
+    def test_localhost_returns_not_needed(self):
+        # Clear any LLM_API_KEY that might be set
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("LLM_API_KEY", None)
+            os.environ.pop("POSE_DIRECTOR_API_KEY", None)
+            os.environ.pop("OPENAI_API_KEY", None)
+            result = resolve_api_key("", "http://localhost:11434/v1")
+            assert result == "not-needed"
+
+    def test_localhost_ip_returns_not_needed(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("LLM_API_KEY", None)
+            os.environ.pop("POSE_DIRECTOR_API_KEY", None)
+            os.environ.pop("OPENAI_API_KEY", None)
+            result = resolve_api_key("", "http://127.0.0.1:8001/v1")
+            assert result == "not-needed"
+
+    @patch.dict(os.environ, {"POSE_DIRECTOR_API_KEY": "pd-key"}, clear=False)
+    def test_generic_fallback_pose_director(self):
+        result = resolve_api_key("", "https://unknown-provider.com/v1")
+        assert result == "pd-key"
+
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "oai-key"}, clear=False)
+    def test_generic_fallback_openai(self):
+        # Clear more specific keys
+        os.environ.pop("POSE_DIRECTOR_API_KEY", None)
+        result = resolve_api_key("", "https://unknown-provider.com/v1")
+        assert result == "oai-key"
+
+    def test_empty_everything_returns_empty(self):
+        with patch.dict(os.environ, {}, clear=True):
+            result = resolve_api_key("", "https://unknown-provider.com/v1")
+            assert result == ""
+
+    def test_widget_overrides_env(self):
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "env-key"}, clear=False):
+            result = resolve_api_key("widget-key", "https://openrouter.ai/api/v1")
+            assert result == "widget-key"

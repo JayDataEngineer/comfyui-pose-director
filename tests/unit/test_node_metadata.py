@@ -72,7 +72,6 @@ class TestSpecificNodeMetadata:
         assert "keypoints" in required
         assert "instruction" in required
         assert "base_url" in required
-        assert "api_key" in required
         assert "model" in required
         assert "width" in required
         assert "height" in required

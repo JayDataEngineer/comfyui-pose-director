@@ -40,7 +40,6 @@ def motion_keyframe_result(comfyui, character_image, llm_config):
             "num_keyframes": 2,
             "total_frames": 16,
             "base_url": llm_url,
-            "api_key": llm_key,
             "model": llm_model,
             "width": 512,
             "height": 512,

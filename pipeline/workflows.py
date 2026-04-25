@@ -94,7 +94,6 @@ def build_motion_director_workflow(
     num_keyframes: int,
     total_frames: int,
     llm_url: str,
-    llm_key: str,
     llm_model: str,
     width: int = 1024,
     height: int = 1024,
@@ -121,7 +120,6 @@ def build_motion_director_workflow(
             "num_keyframes": num_keyframes,
             "total_frames": total_frames,
             "base_url": llm_url,
-            "api_key": llm_key,
             "model": llm_model,
             "width": width,
             "height": height,
@@ -455,6 +453,52 @@ def build_body_mesh_workflow(
             "class_type": "SaveImage",
             "inputs": {
                 "filename_prefix": filename_prefix,
+                "images": ["1", 0],
+            },
+        },
+    }
+
+
+def build_animation_export_workflow(
+    rotations_json: str = "[]",
+    keyframes_json: str = "{}",
+    total_frames: int = 48,
+    fps: int = 30,
+    export_bvh: bool = True,
+    export_video: bool = True,
+    width: int = 512,
+    height: int = 512,
+    filename_prefix: str = "pipeline/animation",
+    video_format: str = "mp4",
+) -> dict:
+    """Build an animation export workflow (interpolation + BVH + video).
+
+    Takes MotionDirector output (rotation keyframes) and produces:
+    - BVH motion capture file (for game engines)
+    - MP4/GIF video preview
+    - Preview image batch
+    """
+    return {
+        "1": {
+            "class_type": "AnimationExporter",
+            "inputs": {
+                "rotations_json": rotations_json,
+                "keyframes_json": keyframes_json,
+                "total_frames": total_frames,
+                "fps": fps,
+                "export_bvh": export_bvh,
+                "export_video": export_video,
+                "width": width,
+                "height": height,
+                "filename_prefix": filename_prefix,
+                "video_format": video_format,
+                "backend": "auto",
+            },
+        },
+        "2": {
+            "class_type": "SaveImage",
+            "inputs": {
+                "filename_prefix": f"{filename_prefix}_preview",
                 "images": ["1", 0],
             },
         },

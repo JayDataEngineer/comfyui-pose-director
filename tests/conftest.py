@@ -306,7 +306,6 @@ def motion_keyframes(comfyui, character_image, skeleton_keypoints, llm_config):
         num_keyframes=4,
         total_frames=32,
         llm_url=llm_url,
-        llm_key=llm_key,
         llm_model=llm_model,
         width=1024,
         height=1024,

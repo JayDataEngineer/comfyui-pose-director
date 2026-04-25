@@ -77,9 +77,8 @@ class MotionDirectorNode:
                 "motion_description": ("STRING", {"default": "Person waving hello", "multiline": True}),
                 "num_keyframes": ("INT", {"default": 4, "min": 2, "max": 16}),
                 "total_frames": ("INT", {"default": 48, "min": 8, "max": 240}),
-                "base_url": ("STRING", {"default": "https://generativelanguage.googleapis.com/v1beta/openai/"}),
-                "api_key": ("STRING", {"default": ""}),
-                "model": ("STRING", {"default": "models/gemini-2.5-flash"}),
+                "base_url": ("STRING", {"default": "https://openrouter.ai/api/v1"}),
+                "model": ("STRING", {"default": "deepseek/deepseek-v4-flash"}),
                 "width": ("INT", {"default": 1024}),
                 "height": ("INT", {"default": 1024}),
             },
@@ -97,7 +96,7 @@ class MotionDirectorNode:
     DESCRIPTION = "Generate keyframe poses from a start pose and motion description using an LLM."
 
     def generate(self, keypoints, motion_description, num_keyframes, total_frames,
-                 base_url, api_key, model, width, height,
+                 base_url, model, width, height,
                  pose_keypoint=None, base_pose="", output_mode="rotations"):
         # Calculate frame spacing for keyframes
         frame_interval = total_frames // (num_keyframes - 1) if num_keyframes > 1 else total_frames
@@ -107,16 +106,16 @@ class MotionDirectorNode:
         if output_mode == "rotations":
             return self._generate_rotations(
                 motion_description, num_keyframes, total_frames, target_frames,
-                base_url, api_key, model, width, height,
+                base_url, model, width, height,
             )
         else:
             return self._generate_keypoints(
                 keypoints, motion_description, num_keyframes, total_frames, target_frames,
-                base_url, api_key, model, width, height, pose_keypoint, base_pose,
+                base_url, model, width, height, pose_keypoint, base_pose,
             )
 
     def _generate_rotations(self, motion_description, num_keyframes, total_frames,
-                            target_frames, base_url, api_key, model, width, height):
+                            target_frames, base_url, model, width, height):
         """Rotation-based mode: LLM outputs joint rotations, rendered as 3D meshes."""
         user_msg = f"""Motion description: {motion_description}
 Total frames: {total_frames}
@@ -129,7 +128,7 @@ Generate smooth, anatomically plausible poses for each keyframe.
 
 Respond with ONLY the JSON keyframes object."""
 
-        response = call_llm(base_url, api_key, model, SYSTEM_PROMPT_ROTATIONS, user_msg)
+        response = call_llm(base_url, "", model, SYSTEM_PROMPT_ROTATIONS, user_msg)
 
         keyframes_data = parse_llm_json(response)
         if isinstance(keyframes_data, list):
@@ -160,7 +159,7 @@ Respond with ONLY the JSON keyframes object."""
         return (batch, keyframes_json, pose_keypoint_out, rotations_json)
 
     def _generate_keypoints(self, keypoints, motion_description, num_keyframes, total_frames,
-                            target_frames, base_url, api_key, model, width, height,
+                            target_frames, base_url, model, width, height,
                             pose_keypoint=None, base_pose=""):
         # If POSE_KEYPOINT provided, extract from it
         if pose_keypoint is not None:
@@ -191,7 +190,7 @@ Target frame numbers: {target_frames}"""
 
         user_msg += "\n\nGenerate keyframe poses for the motion described above. The first keyframe (frame 0) should be close to the starting pose. Generate smooth, anatomically plausible intermediate and ending poses.\n\nRespond with ONLY the JSON keyframes object."
 
-        response = call_llm(base_url, api_key, model, SYSTEM_PROMPT_KEYPOINTS, user_msg)
+        response = call_llm(base_url, "", model, SYSTEM_PROMPT_KEYPOINTS, user_msg)
 
         keyframes_data = parse_llm_json(response)
         print(f"[MotionDirector] Parsed: type={type(keyframes_data).__name__}, "

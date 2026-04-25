@@ -30,7 +30,6 @@ def manipulator_result(comfyui, character_image, llm_config):
             "keypoints": "[]",
             "instruction": "Raise both arms above head",
             "base_url": llm_url,
-            "api_key": llm_key,
             "model": llm_model,
             "width": 1024,
             "height": 1024,

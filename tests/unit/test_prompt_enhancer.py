@@ -27,7 +27,6 @@ class TestPromptEnhancerMetadata:
         assert "prompt" in required
         assert "variant" in required
         assert "base_url" in required
-        assert "api_key" in required
         assert "model" in required
 
     def test_variant_options(self):
@@ -51,7 +50,6 @@ class TestPromptEnhancerEnhance:
             prompt="warrior woman in forest",
             variant="turbo",
             base_url="https://openrouter.ai/api/v1",
-            api_key="",
             model="deepseek/deepseek-v4-flash",
         )
 
@@ -70,7 +68,6 @@ class TestPromptEnhancerEnhance:
             prompt="a cat",
             variant="base",
             base_url="https://openrouter.ai/api/v1",
-            api_key="test-key",
             model="test-model",
         )
 
@@ -86,7 +83,6 @@ class TestPromptEnhancerEnhance:
             prompt="test",
             variant="turbo",
             base_url="http://localhost/v1",
-            api_key="",
             model="m",
         )
 
@@ -112,7 +108,6 @@ class TestPromptEnhancerEnhance:
             prompt="test",
             variant="base",
             base_url="http://localhost/v1",
-            api_key="",
             model="m",
         )
 
@@ -129,7 +124,6 @@ class TestPromptEnhancerEnhance:
             prompt="test",
             variant="turbo",
             base_url="http://localhost/v1",
-            api_key="",
             model="m",
         )
 
@@ -144,7 +138,6 @@ class TestPromptEnhancerEnhance:
             prompt="A young woman with red hair holding a sword",
             variant="turbo",
             base_url="http://localhost/v1",
-            api_key="",
             model="m",
         )
 

@@ -32,7 +32,6 @@ def static_pose_result(comfyui, character_image, llm_config):
             "keypoints": "[]",
             "instruction": "Cross arms across chest",
             "base_url": llm_url,
-            "api_key": llm_key,
             "model": llm_model,
             "width": 1024,
             "height": 1024,

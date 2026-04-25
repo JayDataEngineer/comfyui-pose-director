@@ -37,7 +37,6 @@ def review_result(comfyui, character_image, llm_config):
             "num_keyframes": 3,
             "total_frames": 24,
             "base_url": llm_url,
-            "api_key": llm_key,
             "model": llm_model,
             "width": 512,
             "height": 512,
@@ -49,7 +48,6 @@ def review_result(comfyui, character_image, llm_config):
             "review_prompt": "Review these keyframe skeleton images for pose quality and progression.",
             "pass_threshold": 5,
             "base_url": llm_url,
-            "api_key": llm_key,
             "model": llm_model,
         }},
         # Save keyframes to verify the workflow produced images

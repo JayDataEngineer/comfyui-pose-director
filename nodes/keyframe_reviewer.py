@@ -36,9 +36,8 @@ class KeyframeReviewerNode:
                     "multiline": True,
                 }),
                 "pass_threshold": ("INT", {"default": 7, "min": 1, "max": 10}),
-                "base_url": ("STRING", {"default": "https://generativelanguage.googleapis.com/v1beta/openai/"}),
-                "api_key": ("STRING", {"default": ""}),
-                "model": ("STRING", {"default": "models/gemini-2.5-flash"}),
+                "base_url": ("STRING", {"default": "https://openrouter.ai/api/v1"}),
+                "model": ("STRING", {"default": "deepseek/deepseek-v4-flash"}),
             },
         }
 
@@ -48,13 +47,13 @@ class KeyframeReviewerNode:
     CATEGORY = "pose_director"
     DESCRIPTION = "Send keyframe images to a vision LLM for consistency/quality review before video generation."
 
-    def review(self, images, review_prompt, pass_threshold, base_url, api_key, model):
+    def review(self, images, review_prompt, pass_threshold, base_url, model):
         # Split batch into individual image tensors
         image_list = [images[i] for i in range(images.shape[0])]
 
         response = call_llm_vision(
             base_url=base_url,
-            api_key=api_key,
+            api_key="",
             model=model,
             system_prompt=SYSTEM_PROMPT,
             text_prompt=f"{review_prompt}\n\nHere are {len(image_list)} keyframe images in sequence:",

@@ -32,9 +32,8 @@ class PoseManipulatorNode:
             "required": {
                 "keypoints": ("STRING", {"default": "[]", "multiline": True}),
                 "instruction": ("STRING", {"default": "Raise both arms above head", "multiline": True}),
-                "base_url": ("STRING", {"default": "https://generativelanguage.googleapis.com/v1beta/openai/"}),
-                "api_key": ("STRING", {"default": ""}),
-                "model": ("STRING", {"default": "models/gemini-2.5-flash"}),
+                "base_url": ("STRING", {"default": "https://openrouter.ai/api/v1"}),
+                "model": ("STRING", {"default": "deepseek/deepseek-v4-flash"}),
                 "width": ("INT", {"default": 1024}),
                 "height": ("INT", {"default": 1024}),
             },
@@ -50,7 +49,7 @@ class PoseManipulatorNode:
     CATEGORY = "pose_director"
     DESCRIPTION = "Use an LLM to modify an OpenPose skeleton based on a text instruction."
 
-    def manipulate(self, keypoints, instruction, base_url, api_key, model, width, height, pose_keypoint=None, base_pose=""):
+    def manipulate(self, keypoints, instruction, base_url, model, width, height, pose_keypoint=None, base_pose=""):
         # If POSE_KEYPOINT provided, extract from it (takes priority over STRING input)
         if pose_keypoint is not None:
             kpts, canvas_h, canvas_w = extract_keypoints_from_dwpose(pose_keypoint)
@@ -78,7 +77,7 @@ Instruction: {instruction}"""
 
         user_msg += "\n\nRespond with ONLY the modified keypoints array."
 
-        response = call_llm(base_url, api_key, model, SYSTEM_PROMPT, user_msg)
+        response = call_llm(base_url, "", model, SYSTEM_PROMPT, user_msg)
 
         new_kpts = parse_llm_json(response)
         new_kpts_json = json.dumps(new_kpts)

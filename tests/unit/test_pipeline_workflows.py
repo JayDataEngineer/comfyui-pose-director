@@ -80,7 +80,6 @@ class TestBuildMotionDirectorWorkflow:
             num_keyframes=3,
             total_frames=25,
             llm_url="http://test/v1",
-            llm_key="k",
             llm_model="m",
         )
         node_types = {v["class_type"] for v in wf.values()}
@@ -95,12 +94,10 @@ class TestBuildMotionDirectorWorkflow:
             num_keyframes=4,
             total_frames=32,
             llm_url="http://llm:8000/v1",
-            llm_key="secret",
             llm_model="big-model",
         )
         md = [v for v in wf.values() if v["class_type"] == "MotionDirector"][0]
         assert md["inputs"]["base_url"] == "http://llm:8000/v1"
-        assert md["inputs"]["api_key"] == "secret"
         assert md["inputs"]["model"] == "big-model"
         assert md["inputs"]["num_keyframes"] == 4
 
@@ -110,7 +107,7 @@ class TestBuildMotionDirectorWorkflow:
             motion_description="wave",
             num_keyframes=3,
             total_frames=25,
-            llm_url="u", llm_key="k", llm_model="m",
+            llm_url="u", llm_model="m",
         )
         md = [v for v in wf.values() if v["class_type"] == "MotionDirector"][0]
         assert md["inputs"]["pose_keypoint"] == ["2", 1]

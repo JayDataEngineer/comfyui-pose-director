@@ -69,7 +69,6 @@ def e2e_result(comfyui, llm_config):
         num_keyframes=3,
         total_frames=25,
         llm_url=llm_url,
-        llm_key=llm_key,
         llm_model=llm_model,
         width=1024,
         height=1024,

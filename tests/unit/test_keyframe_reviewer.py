@@ -29,7 +29,6 @@ class TestKeyframeReviewerReview:
             review_prompt="Review these keyframes",
             pass_threshold=7,
             base_url="http://test/v1",
-            api_key="k",
             model="m",
         )
 
@@ -55,7 +54,6 @@ class TestKeyframeReviewerReview:
             review_prompt="Review these keyframes",
             pass_threshold=7,
             base_url="http://test/v1",
-            api_key="k",
             model="m",
         )
 
@@ -77,7 +75,6 @@ class TestKeyframeReviewerReview:
             review_prompt="Review",
             pass_threshold=7,
             base_url="http://test/v1",
-            api_key="k",
             model="m",
         )
 
@@ -102,7 +99,6 @@ class TestKeyframeReviewerReview:
             review_prompt="Review",
             pass_threshold=7,
             base_url="http://test/v1",
-            api_key="k",
             model="m",
         )
 
@@ -126,7 +122,6 @@ class TestKeyframeReviewerReview:
             review_prompt="Review",
             pass_threshold=7,
             base_url="http://test/v1",
-            api_key="k",
             model="m",
         )
 

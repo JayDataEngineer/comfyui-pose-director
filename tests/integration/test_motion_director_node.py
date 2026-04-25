@@ -32,7 +32,6 @@ def motion_result(comfyui, character_image, llm_config):
             "num_keyframes": 4,
             "total_frames": 32,
             "base_url": llm_url,
-            "api_key": llm_key,
             "model": llm_model,
             "width": 1024,
             "height": 1024,

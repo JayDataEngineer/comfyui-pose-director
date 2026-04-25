@@ -139,7 +139,6 @@ class PromptEnhancerNode:
                 "prompt": ("STRING", {"default": "A warrior woman standing in a forest", "multiline": True}),
                 "variant": (["turbo", "base"], {"default": "turbo"}),
                 "base_url": ("STRING", {"default": "https://openrouter.ai/api/v1"}),
-                "api_key": ("STRING", {"default": ""}),
                 "model": ("STRING", {"default": "deepseek/deepseek-v4-flash"}),
             },
         }
@@ -150,7 +149,7 @@ class PromptEnhancerNode:
     CATEGORY = "pose_director"
     DESCRIPTION = "Enhance a text prompt for Z-Image generation using an LLM with expert prompting knowledge."
 
-    def enhance(self, prompt, variant, base_url, api_key, model):
+    def enhance(self, prompt, variant, base_url, model):
         variant_rules = _VARIANT_RULES.get(variant, _VARIANT_RULES["turbo"])
         system_prompt = (
             _SYSTEM_PROMPT_PREFIX
@@ -161,7 +160,7 @@ class PromptEnhancerNode:
 
         response = call_llm(
             base_url=base_url,
-            api_key=api_key,
+            api_key="",
             model=model,
             system_prompt=system_prompt,
             user_message=prompt,

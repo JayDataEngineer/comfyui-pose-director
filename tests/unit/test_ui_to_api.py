@@ -25,41 +25,31 @@ class TestConvertUIToAPI:
         ui = load_ui_workflow(WORKFLOWS_DIR / name)
         return convert_ui_to_api(ui)
 
-    def test_loadimage_conversion(self):
-        """LoadImage should produce image and upload inputs."""
-        api = self._load_and_convert("01_motion_keyframes_rotation.json")
-        loadimage = api["1"]
-        assert loadimage["class_type"] == "LoadImage"
-        assert loadimage["inputs"]["image"] == "character.png"
-        assert loadimage["inputs"]["upload"] == "image"
-
-    def test_openpose_preprocessor_conversion(self):
-        """OpenposePreprocessor should map widgets correctly."""
-        api = self._load_and_convert("01_motion_keyframes_rotation.json")
-        opp = api["2"]
-        assert opp["class_type"] == "OpenposePreprocessor"
-        assert opp["inputs"]["image"] == ["1", 0]
-        assert opp["inputs"]["detect_hand"] == "enable"
-        assert opp["inputs"]["detect_body"] == "enable"
-        assert opp["inputs"]["detect_face"] == "disable"
-        assert opp["inputs"]["resolution"] == 1024
-
     def test_motion_director_conversion(self):
-        """MotionDirector should map all params including hidden output_mode."""
+        """MotionDirector should map rotation-only params correctly."""
         api = self._load_and_convert("01_motion_keyframes_rotation.json")
-        md = api["3"]
+        md = api["1"]
         assert md["class_type"] == "MotionDirector"
-        assert md["inputs"]["keypoints"] == "[]"
         assert md["inputs"]["motion_description"] == "Character waves their right hand in a friendly greeting"
         assert md["inputs"]["num_keyframes"] == 4
-        assert md["inputs"]["total_frames"] == 32
-        assert md["inputs"]["base_url"] == "https://generativelanguage.googleapis.com/v1beta/openai/"
-        assert md["inputs"]["api_key"] == ""
-        assert md["inputs"]["model"] == "models/gemini-2.5-flash"
+        assert md["inputs"]["total_frames"] == 48
+        assert md["inputs"]["base_url"] == "https://openrouter.ai/api/v1"
+        assert md["inputs"]["model"] == "deepseek/deepseek-v4-flash"
         assert md["inputs"]["width"] == 1024
         assert md["inputs"]["height"] == 1024
-        assert md["inputs"]["pose_keypoint"] == ["2", 1]
-        assert md["inputs"]["output_mode"] == "rotations"
+        assert md["inputs"]["max_retries"] == 2
+        # No legacy inputs
+        assert "keypoints" not in md["inputs"]
+        assert "pose_keypoint" not in md["inputs"]
+        assert "output_mode" not in md["inputs"]
+        assert "api_key" not in md["inputs"]
+
+    def test_preview_image_conversion(self):
+        """PreviewImage should map correctly."""
+        api = self._load_and_convert("01_motion_keyframes_rotation.json")
+        pi = api["4"]
+        assert pi["class_type"] == "PreviewImage"
+        assert pi["inputs"]["images"] == ["1", 0]  # connected to MotionDirector output 0
 
     def test_ksampler_skips_control_after_generate(self):
         """KSampler should skip the UI-only control_after_generate widget."""
@@ -112,7 +102,7 @@ class TestConvertUIToAPI:
 
     def test_connection_references_are_strings(self):
         """All connection references should have string node IDs."""
-        api = self._load_and_convert("01_motion_keyframes_rotation.json")
+        api = self._load_and_convert("04_ltx_video_assembly.json")
         for node_id, node_def in api.items():
             for val in node_def["inputs"].values():
                 if isinstance(val, list):
@@ -134,11 +124,11 @@ class TestPatchWidgetValue:
         api = convert_ui_to_api(ui)
         assert api["5"]["inputs"]["text"] == "new prompt"
 
-    def test_patch_loadimage(self):
+    def test_patch_motion_director(self):
         ui = load_ui_workflow(WORKFLOWS_DIR / "01_motion_keyframes_rotation.json")
-        patch_widget_value(ui, "LoadImage", "image", "new_char.png")
+        patch_widget_value(ui, "MotionDirector", "motion_description", "jump")
         api = convert_ui_to_api(ui)
-        assert api["1"]["inputs"]["image"] == "new_char.png"
+        assert api["1"]["inputs"]["motion_description"] == "jump"
 
     def test_patch_by_index(self):
         ui = load_ui_workflow(WORKFLOWS_DIR / "04_ltx_video_assembly.json")

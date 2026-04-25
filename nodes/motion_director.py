@@ -1,79 +1,106 @@
-"""MotionDirector — Generates keyframe poses from a start pose + text using LLM."""
+"""MotionDirector — Generates keyframe poses from a motion description using LLM.
+
+Rotation-only mode: LLM outputs joint rotation angles (degrees from T-pose),
+validated and sanitized before rendering as 3D Anny body meshes.
+"""
 
 import json
 
 import torch
 
 from ..utils.api_client import call_llm
-from ..utils.json_parser import parse_llm_json, extract_keypoints_from_dwpose
-from ..utils.skeleton_validator import validate_keypoints, validate_keyframe_consistency, sanitize_keypoints
-from .pose_renderer import PoseRendererNode
+from ..utils.json_parser import parse_llm_json
+from ..utils.rotation_validator import (
+    REQUIRED_JOINTS,
+    validate_rotations,
+    sanitize_rotations,
+    validate_rotation_consistency,
+)
 
+SYSTEM_PROMPT = """\
+You are a motion keyframe generator for a 3D humanoid body model (Anny).
+You receive a text description of a motion and output keyframe poses as joint rotations.
 
-SYSTEM_PROMPT_ROTATIONS = """You are a motion keyframe generator. You generate poses as joint rotation offsets from a T-pose (arms outstretched horizontally). For each joint, provide rotation in degrees around X (pitch), Y (yaw), Z (roll) axes.
+## Coordinate System
+- All rotations are in **degrees** relative to T-pose (arms outstretched horizontally, palms down).
+- Rotation order: **XYZ intrinsic** (equivalent to Z-Y-X extrinsic). Applied as: first X, then Y, then Z.
+- **X-axis (Pitch):** Forward tilt = positive, backward tilt = negative. Think: nodding "yes".
+- **Y-axis (Yaw):** Rotate left = positive, rotate right = negative. Think: shaking head "no".
+- **Z-axis (Roll):** Move outward/away from body = positive for RIGHT limbs, negative for LEFT limbs. Think: tilting head to shoulder.
 
-Available joints:
-- spine, neck, head
-- right_shoulder, right_elbow, right_wrist
-- left_shoulder, left_elbow, left_wrist
-- right_hip, right_knee, right_ankle
-- left_hip, left_knee, left_ankle
+## Rotation Hierarchy (IMPORTANT)
+Rotations cascade down the skeleton. Parent joint rotations affect child joints in world space.
+- To turn the ENTIRE character, change only the **spine Y-rotation** — do NOT rotate every joint.
+- Arm rotations are LOCAL to the shoulder. If the shoulder is rotated, the elbow/wrist follow.
 
-Rotation conventions:
-- All rotations are in degrees relative to T-pose (0,0,0 = T-pose position)
-- X axis: positive = forward tilt, negative = backward tilt
-- Y axis: positive = rotate left, negative = rotate right
-- Z axis: positive = outward rotation, negative = inward rotation
-- Elbows only bend in one direction (negative Z for right, positive Z for left)
-- Knees only bend backward (positive X)
-- Keep rotations anatomically plausible (no 360° spins)
-- Smooth transitions between keyframes
+## Mirroring (Left vs Right)
+For lateral movements (Z-axis), left and right limbs are MIRRORED:
+- Right shoulder Z=+90 means arm points DOWN. Left shoulder Z=-90 means arm points DOWN.
+- To move BOTH arms out from body: right_shoulder Z=positive, left_shoulder Z=negative.
 
-You MUST respond with ONLY a JSON object with this exact format:
+## Reference Poses (Anchors)
+Use these to calibrate your spatial reasoning:
+- **Arm straight down:** shoulder Z = +90 (right) or -90 (left)
+- **Arm straight up:** shoulder Z = -90 (right) or +90 (left)
+- **Elbow bent 90°:** elbow Z = -90 (right) or +90 (left)
+- **Knee bent 90°:** knee X = +90
+- **Character facing right:** spine Y = -90
+- **Leaning forward 45°:** spine X = +45
+
+## Available Joints (exactly 15)
+spine, neck, head,
+right_shoulder, right_elbow, right_wrist,
+left_shoulder, left_elbow, left_wrist,
+right_hip, right_knee, right_ankle,
+left_hip, left_knee, left_ankle
+
+## Rules
+- Elbows only bend in ONE direction: negative Z for right, positive Z for left
+- Knees only bend BACKWARD: positive X only (range 0 to 140)
+- Keep rotations anatomically plausible (no 360° spins, no dislocated joints)
+- Smooth transitions between keyframes (no teleportation)
+- Frame 0 is always the neutral T-pose (all zeros)
+
+## Output Format
+You MUST respond with ONLY a JSON object — no markdown, no explanations:
 {
   "keyframes": [
-    {"frame": 0, "rotations": {"spine": [0, 0, 0], "neck": [0, 0, 0], "head": [0, 0, 0], "right_shoulder": [0, 0, 90], "right_elbow": [0, 0, 0], "right_wrist": [0, 0, 0], "left_shoulder": [0, 0, -90], "left_elbow": [0, 0, 0], "left_wrist": [0, 0, 0], "right_hip": [0, 0, 0], "right_knee": [0, 0, 0], "right_ankle": [0, 0, 0], "left_hip": [0, 0, 0], "left_knee": [0, 0, 0], "left_ankle": [0, 0, 0]}},
-    {"frame": <n>, "rotations": {...}},
-    ...
+    {"frame": 0, "rotations": {"spine": [0,0,0], "neck": [0,0,0], "head": [0,0,0], "right_shoulder": [0,0,0], "right_elbow": [0,0,0], "right_wrist": [0,0,0], "left_shoulder": [0,0,0], "left_elbow": [0,0,0], "left_wrist": [0,0,0], "right_hip": [0,0,0], "right_knee": [0,0,0], "right_ankle": [0,0,0], "left_hip": [0,0,0], "left_knee": [0,0,0], "left_ankle": [0,0,0]}},
+    {"frame": <n>, "rotations": {<ONLY include joints that CHANGE from previous keyframe>}}
   ]
 }
 
-No explanations, no markdown, just the raw JSON object."""
-
-SYSTEM_PROMPT_KEYPOINTS = """You are a motion keyframe generator. You receive an OpenPose keypoint array for a starting pose and a text description of a motion. You must generate keyframe poses at specific frame numbers.
-
-The keypoints use COCO-18 format: flat array of [x, y, confidence] for each of 18 points:
-0=Nose, 1=Neck, 2=RShoulder, 3=RElbow, 4=RWrist, 5=LShoulder, 6=LElbow, 7=LWrist,
-8=RHip, 9=RKnee, 10=RAnkle, 11=LHip, 12=LKnee, 13=LAnkle, 14=REye, 15=LEye, 16=REar, 17=LEar
-
-Rules:
-- Keep the overall scale and position similar to the input
-- Maintain anatomical constraints (elbows bend one way, knees bend one way)
-- Keep the person balanced in each keyframe
-- Smooth transitions between keyframes (no sudden jumps)
-- Each keyframe should be a plausible pose at that point in the motion
-- Use confidence 0.9 for keypoints you are sure about, 0.5 for uncertain
-
-You MUST respond with ONLY a JSON object with this exact format:
+## Example: "Raise right arm and wave"
 {
   "keyframes": [
-    {"frame": 0, "keypoints": [...]},
-    {"frame": <n>, "keypoints": [...]},
-    ...
+    {"frame": 0, "rotations": {"spine": [0,0,0], "neck": [0,0,0], "head": [0,0,0], "right_shoulder": [0,0,0], "right_elbow": [0,0,0], "right_wrist": [0,0,0], "left_shoulder": [0,0,0], "left_elbow": [0,0,0], "left_wrist": [0,0,0], "right_hip": [0,0,0], "right_knee": [0,0,0], "right_ankle": [0,0,0], "left_hip": [0,0,0], "left_knee": [0,0,0], "left_ankle": [0,0,0]}},
+    {"frame": 16, "rotations": {"right_shoulder": [0,0,-90], "right_elbow": [0,0,-90], "right_wrist": [0,0,20]}},
+    {"frame": 32, "rotations": {"right_shoulder": [0,0,-90], "right_elbow": [0,0,-90], "right_wrist": [0,0,-20]}},
+    {"frame": 47, "rotations": {"right_shoulder": [0,0,-90], "right_elbow": [0,0,-90], "right_wrist": [0,0,20]}}
   ]
 }
 
-No explanations, no markdown, just the raw JSON object."""
+## Example: "Squat down"
+{
+  "keyframes": [
+    {"frame": 0, "rotations": {"spine": [0,0,0], "neck": [0,0,0], "head": [0,0,0], "right_shoulder": [0,0,0], "right_elbow": [0,0,0], "right_wrist": [0,0,0], "left_shoulder": [0,0,0], "left_elbow": [0,0,0], "left_wrist": [0,0,0], "right_hip": [0,0,0], "right_knee": [0,0,0], "right_ankle": [0,0,0], "left_hip": [0,0,0], "left_knee": [0,0,0], "left_ankle": [0,0,0]}},
+    {"frame": 16, "rotations": {"spine": [10,0,0], "right_hip": [60,0,0], "right_knee": [90,0,0], "left_hip": [60,0,0], "left_knee": [90,0,0], "right_shoulder": [0,0,45], "left_shoulder": [0,0,-45]}},
+    {"frame": 32, "rotations": {"spine": [15,0,0], "right_hip": [80,0,0], "right_knee": [110,0,0], "left_hip": [80,0,0], "left_knee": [110,0,0], "right_shoulder": [0,0,60], "left_shoulder": [0,0,-60]}},
+    {"frame": 47, "rotations": {"spine": [10,0,0], "right_hip": [60,0,0], "right_knee": [90,0,0], "left_hip": [60,0,0], "left_knee": [90,0,0], "right_shoulder": [0,0,45], "left_shoulder": [0,0,-45]}}
+  ]
+}"""
 
 
 class MotionDirectorNode:
-    """Generate keyframe poses from a start pose and motion description using an LLM."""
+    """Generate keyframe poses from a motion description using an LLM.
+
+    Outputs joint rotations rendered as 3D Anny body meshes.
+    """
 
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "keypoints": ("STRING", {"default": "[]", "multiline": True}),
                 "motion_description": ("STRING", {"default": "Person waving hello", "multiline": True}),
                 "num_keyframes": ("INT", {"default": 4, "min": 2, "max": 16}),
                 "total_frames": ("INT", {"default": 48, "min": 8, "max": 240}),
@@ -83,162 +110,135 @@ class MotionDirectorNode:
                 "height": ("INT", {"default": 1024}),
             },
             "optional": {
-                "pose_keypoint": ("POSE_KEYPOINT",),
-                "base_pose": ("STRING", {"default": ""}),
-                "output_mode": (["keypoints", "rotations"], {"default": "keypoints"}),
+                "max_retries": ("INT", {"default": 2, "min": 0, "max": 5}),
             }
         }
 
-    RETURN_TYPES = ("IMAGE", "STRING", "POSE_KEYPOINT", "STRING")
-    OUTPUT_NAMES = ("pose_batch", "keyframes_json", "pose_keypoints", "rotations_json")
+    RETURN_TYPES = ("IMAGE", "STRING", "STRING")
+    OUTPUT_NAMES = ("pose_batch", "keyframes_json", "rotations_json")
     FUNCTION = "generate"
     CATEGORY = "pose_director"
-    DESCRIPTION = "Generate keyframe poses from a start pose and motion description using an LLM."
+    DESCRIPTION = "Generate keyframe poses from a motion description. Outputs 3D body mesh renders."
 
-    def generate(self, keypoints, motion_description, num_keyframes, total_frames,
-                 base_url, model, width, height,
-                 pose_keypoint=None, base_pose="", output_mode="rotations"):
-        # Calculate frame spacing for keyframes
+    def generate(self, motion_description, num_keyframes, total_frames,
+                 base_url, model, width, height, max_retries=2):
+        # Calculate frame spacing
         frame_interval = total_frames // (num_keyframes - 1) if num_keyframes > 1 else total_frames
         target_frames = [i * frame_interval for i in range(num_keyframes)]
         target_frames[-1] = total_frames - 1
 
-        if output_mode == "rotations":
-            return self._generate_rotations(
-                motion_description, num_keyframes, total_frames, target_frames,
-                base_url, model, width, height,
-            )
-        else:
-            return self._generate_keypoints(
-                keypoints, motion_description, num_keyframes, total_frames, target_frames,
-                base_url, model, width, height, pose_keypoint, base_pose,
-            )
+        # Build user prompt
+        user_msg = _build_user_prompt(motion_description, num_keyframes, total_frames, target_frames)
 
-    def _generate_rotations(self, motion_description, num_keyframes, total_frames,
-                            target_frames, base_url, model, width, height):
-        """Rotation-based mode: LLM outputs joint rotations, rendered as 3D meshes."""
-        user_msg = f"""Motion description: {motion_description}
-Total frames: {total_frames}
-Number of keyframes to generate: {num_keyframes}
-Target frame numbers: {target_frames}
-Image dimensions: {width}x{height}
+        # Generate with validation + retry
+        keyframes = self._generate_with_retry(
+            base_url, model, user_msg, max_retries,
+        )
 
-The first keyframe (frame 0) should be a neutral standing pose (all rotations near zero).
-Generate smooth, anatomically plausible poses for each keyframe.
+        # Sanitize: clamp to anatomical limits
+        keyframes = sanitize_rotations(keyframes)
 
-Respond with ONLY the JSON keyframes object."""
+        # Fill in missing joints from previous keyframe (for partial rotations)
+        keyframes = _fill_missing_joints(keyframes)
 
-        response = call_llm(base_url, "", model, SYSTEM_PROMPT_ROTATIONS, user_msg)
+        # Temporal consistency check (log warnings only)
+        consistency = validate_rotation_consistency(keyframes)
+        if not consistency["is_consistent"]:
+            for flag in consistency["flagged"]:
+                print(f"[MotionDirector] Consistency: {flag['joint']} {flag['axis']}-axis "
+                      f"jumped {flag['delta']:.1f}° between frames {flag['frame_pair']} "
+                      f"(max allowed: {flag['max_allowed']:.1f}°)")
 
-        keyframes_data = parse_llm_json(response)
-        if isinstance(keyframes_data, list):
-            keyframes_data = keyframes_data[0] if keyframes_data else {}
-        keyframes = keyframes_data["keyframes"]
+        # Build output data
+        keyframes_data = {"keyframes": keyframes}
         keyframes_json = json.dumps(keyframes_data)
+        all_rotations = [kf["rotations"] for kf in keyframes]
+        rotations_json = json.dumps(all_rotations)
 
         # Render each keyframe as a 3D body mesh
         from .body_mesh_renderer import BodyMeshRendererNode
         mesh_renderer = BodyMeshRendererNode()
         images = []
-        all_rotations = []
         for kf in keyframes:
-            rots = kf["rotations"]
-            all_rotations.append(rots)
-            rots_json = json.dumps(rots)
+            rots_json = json.dumps(kf["rotations"])
             (img_tensor,) = mesh_renderer.render(rots_json, width, height)
             images.append(img_tensor)
 
         batch = torch.cat(images, dim=0)
 
-        # No POSE_KEYPOINT output in rotation mode — return empty list
-        pose_keypoint_out = []
+        return (batch, keyframes_json, rotations_json)
 
-        # Rotations JSON: one rotation dict per keyframe
-        rotations_json = json.dumps(all_rotations)
+    def _generate_with_retry(self, base_url, model, user_msg, max_retries):
+        """Call LLM, validate output, retry with error feedback if needed."""
+        last_error = ""
+        for attempt in range(max_retries + 1):
+            # Build prompt with error feedback from previous attempt
+            prompt = user_msg
+            if last_error:
+                prompt += f"\n\nYour previous attempt had these errors:\n{last_error}\nPlease fix and try again."
 
-        return (batch, keyframes_json, pose_keypoint_out, rotations_json)
+            response = call_llm(base_url, "", model, SYSTEM_PROMPT, prompt)
 
-    def _generate_keypoints(self, keypoints, motion_description, num_keyframes, total_frames,
-                            target_frames, base_url, model, width, height,
-                            pose_keypoint=None, base_pose=""):
-        # If POSE_KEYPOINT provided, extract from it
-        if pose_keypoint is not None:
-            kpts, canvas_h, canvas_w = extract_keypoints_from_dwpose(pose_keypoint)
-            if canvas_h and canvas_w:
-                height = canvas_h
-                width = canvas_w
-        else:
-            kpts = json.loads(keypoints) if isinstance(keypoints, str) else keypoints
-
-        user_msg = f"""Starting pose keypoints (flat array, [x, y, confidence] per point):
-{json.dumps(kpts)}
-
-Image dimensions: {width}x{height}
-Motion description: {motion_description}
-Total frames: {total_frames}
-Number of keyframes to generate: {num_keyframes}
-Target frame numbers: {target_frames}"""
-
-        # If a base pose from the library is provided, include it as an anatomical anchor
-        if base_pose:
             try:
-                from ..utils.pose_library import load_pose
-                pose_data = load_pose(base_pose)
-                user_msg += f"\n\nAnatomical reference (base pose for proportion/scale anchor):\n{json.dumps(pose_data['keypoints'])}\nKeep limb lengths and body proportions consistent with this reference across all keyframes."
-            except (FileNotFoundError, KeyError):
-                print(f"[MotionDirector] Warning: base pose '{base_pose}' not found, skipping")
+                keyframes_data = parse_llm_json(response)
+                if isinstance(keyframes_data, list):
+                    keyframes_data = keyframes_data[0] if keyframes_data else {}
+                keyframes = keyframes_data["keyframes"]
+            except (KeyError, TypeError, IndexError, ValueError) as e:
+                last_error = f"Could not parse keyframes from response: {e}"
+                print(f"[MotionDirector] Attempt {attempt + 1} parse error: {e}")
+                continue
 
-        user_msg += "\n\nGenerate keyframe poses for the motion described above. The first keyframe (frame 0) should be close to the starting pose. Generate smooth, anatomically plausible intermediate and ending poses.\n\nRespond with ONLY the JSON keyframes object."
+            # Validate structure
+            valid, issues = validate_rotations(keyframes)
+            if valid:
+                return keyframes
 
-        response = call_llm(base_url, "", model, SYSTEM_PROMPT_KEYPOINTS, user_msg)
+            # Build error feedback for retry
+            errors = [i for i in issues if i.severity == "error"]
+            last_error = "\n".join(i.message for i in errors)
+            print(f"[MotionDirector] Attempt {attempt + 1} validation failed: {last_error}")
 
-        keyframes_data = parse_llm_json(response)
-        print(f"[MotionDirector] Parsed: type={type(keyframes_data).__name__}, "
-              f"keys={list(keyframes_data.keys()) if isinstance(keyframes_data, dict) else 'list len=' + str(len(keyframes_data))}")
-        # LLM may return a list wrapping the dict — unwrap it
-        if isinstance(keyframes_data, list):
-            keyframes_data = keyframes_data[0] if keyframes_data else {}
-        keyframes = keyframes_data["keyframes"]
-        keyframes_json = json.dumps(keyframes_data)
+        # All retries exhausted — return last parsed keyframes (will be sanitized)
+        print(f"[MotionDirector] All {max_retries + 1} attempts exhausted, using best effort")
+        return keyframes
 
-        # Soft validation: log anatomical issues per keyframe
-        all_kpts = []
-        for i, kf in enumerate(keyframes):
-            kf_kpts = kf["keypoints"]
-            is_valid, issues = validate_keypoints(kf_kpts, width, height)
-            if not is_valid or issues:
-                for issue in issues:
-                    print(f"[MotionDirector] Keyframe {i} validation {issue.severity}: {issue.message}")
-            all_kpts.append(kf_kpts)
 
-        # Cross-keyframe consistency check (shimmer detection)
-        if len(all_kpts) >= 2:
-            consistency = validate_keyframe_consistency(all_kpts)
-            if not consistency["is_consistent"]:
-                print(f"[MotionDirector] Keyframe consistency warning: {consistency['flagged_bones']}")
+def _build_user_prompt(motion_description, num_keyframes, total_frames, target_frames):
+    """Build the user-facing prompt for the LLM."""
+    return f"""Generate keyframes for this motion:
 
-        # Render each keyframe into a skeleton image
-        renderer = PoseRendererNode()
-        images = []
-        for kf in keyframes:
-            kf_kpts = sanitize_keypoints(kf["keypoints"], width, height)
-            kf["keypoints"] = kf_kpts  # update for downstream use
-            render_input = json.dumps([{"pose_keypoints_2d": kf_kpts}])
-            (img_tensor,) = renderer.render(render_input, width, height, 4, 6)
-            images.append(img_tensor)
+Motion: {motion_description}
+Total frames: {total_frames}
+Keyframes needed: {num_keyframes}
+Target frame numbers: {target_frames}
 
-        # Stack all images into a single batch tensor [N, H, W, 3]
-        batch = torch.cat(images, dim=0)
+Frame 0 MUST be the neutral T-pose (all rotations zero).
+For frames after 0, ONLY include joints that change from the previous keyframe.
 
-        # Build POSE_KEYPOINT compatible output
-        pose_keypoint_out = [
-            {
-                "people": [{"pose_keypoints_2d": kf["keypoints"]}],
-                "canvas_height": height,
-                "canvas_width": width,
-                "frame": kf["frame"],
-            }
-            for kf in keyframes
-        ]
+Respond with ONLY the JSON keyframes object."""
 
-        return (batch, keyframes_json, pose_keypoint_out, "")
+
+def _fill_missing_joints(keyframes: list[dict]) -> list[dict]:
+    """Fill in joints missing from later keyframes using values from previous keyframe.
+
+    The LLM is instructed to only output changed joints. This fills in the rest
+    so every keyframe has all 15 joints for BodyMeshRenderer.
+    """
+    if not keyframes:
+        return keyframes
+
+    # Ensure frame 0 has all joints
+    for joint in REQUIRED_JOINTS:
+        if joint not in keyframes[0]["rotations"]:
+            keyframes[0]["rotations"][joint] = [0, 0, 0]
+
+    # Cascade forward
+    for i in range(1, len(keyframes)):
+        prev_rots = keyframes[i - 1]["rotations"]
+        curr_rots = keyframes[i]["rotations"]
+        for joint in REQUIRED_JOINTS:
+            if joint not in curr_rots:
+                curr_rots[joint] = list(prev_rots[joint])
+
+    return keyframes

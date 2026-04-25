@@ -28,7 +28,10 @@ class TestLoadWorkflow:
         wf = load_ui_workflow(WORKFLOWS_DIR / "01_motion_keyframes_rotation.json")
         node_types = {n["type"] for n in wf["nodes"]}
         assert "MotionDirector" in node_types
-        assert "OpenposePreprocessor" in node_types
+        assert "PreviewImage" in node_types
+        # No legacy nodes
+        assert "OpenposePreprocessor" not in node_types
+        assert "LoadImage" not in node_types
 
     def test_load_vnccs_workflow(self):
         wf = load_ui_workflow(WORKFLOWS_DIR / "02_vnccs_edit_keyframe.json")

@@ -69,13 +69,11 @@ def e2e_result(comfyui, llm_config):
     print("[E2E] Step C: Generating motion keyframes (rotation mode → Anny body mesh)...")
     kf_workflow = load_ui_workflow(WORKFLOWS_DIR / "01_motion_keyframes_rotation.json")
     patch_ui_workflow(kf_workflow, {
-        "LoadImage": {"image": "PoseDirector/e2e_character.png"},
         "MotionDirector": {
             "motion_description": "Character performs a cute anime dance, waving arms and shifting weight side to side with playful poses",
             "num_keyframes": 3,
             "total_frames": 25,
             "base_url": llm_url,
-            "api_key": llm_key,
             "model": llm_model,
         },
         "PreviewImage": {"filename_prefix": "e2e/keyframes"},
@@ -90,7 +88,7 @@ def e2e_result(comfyui, llm_config):
     for i, kf_bytes in enumerate(kf_images):
         upload_image(kf_bytes, f"e2e_kf_{i}.png", "PoseDirector")
 
-    # Restart ComfyUI to clear OpenPose + MotionDirector from VRAM before loading Qwen Edit
+    # Restart ComfyUI to clear MotionDirector / Anny from VRAM before loading Qwen Edit
     restart_comfyui()
 
     # ── Step D: Edit ALL keyframes with VNCCS QWEN Encoder ────────────

@@ -1,4 +1,4 @@
-"""Unit tests for MotionDirector node with mocked LLM calls."""
+"""Unit tests for MotionDirector node (rotation-only mode) with mocked LLM calls."""
 
 import json
 from unittest.mock import patch, MagicMock
@@ -9,239 +9,219 @@ import torch
 from pose_director_root.nodes.motion_director import MotionDirectorNode
 
 
-def _make_coco18_keypoints():
-    """Generate a valid COCO-18 keypoint array (54 floats)."""
-    kpts = []
-    for i in range(18):
-        kpts.extend([float(100 + i * 10), float(200 + i * 5), 0.9])
-    return kpts
+# Valid LLM response with all 15 joints
+VALID_ROTATIONS = {
+    "spine": [0, 0, 0], "neck": [0, 0, 0], "head": [0, 0, 0],
+    "right_shoulder": [0, 0, 90], "right_elbow": [0, 0, -45],
+    "right_wrist": [0, 0, 0], "left_shoulder": [0, 0, -90],
+    "left_elbow": [0, 0, 45], "left_wrist": [0, 0, 0],
+    "right_hip": [0, 0, 0], "right_knee": [0, 0, 0],
+    "right_ankle": [0, 0, 0], "left_hip": [0, 0, 0],
+    "left_knee": [0, 0, 0], "left_ankle": [0, 0, 0],
+}
+
+
+def _make_valid_response(num_keyframes=2, total_frames=32):
+    """Create a valid LLM response with all joints."""
+    frames = [0]
+    if num_keyframes > 1:
+        interval = total_frames // (num_keyframes - 1)
+        frames = [i * interval for i in range(num_keyframes)]
+        frames[-1] = total_frames - 1
+
+    keyframes = [
+        {"frame": f, "rotations": dict(VALID_ROTATIONS)}
+        for f in frames
+    ]
+    return json.dumps({"keyframes": keyframes})
 
 
 class TestMotionDirectorGenerate:
     """Tests for MotionDirectorNode.generate() with mocked LLM."""
 
     @patch("pose_director_root.nodes.motion_director.call_llm")
-    def test_generate_basic(self, mock_call_llm):
-        """Happy path: generate keyframes from string keypoints."""
-        kpts = _make_coco18_keypoints()
-        mock_call_llm.return_value = json.dumps({
-            "keyframes": [
-                {"frame": 0, "keypoints": kpts},
-                {"frame": 16, "keypoints": kpts},
-            ]
-        })
+    def test_generate_basic_rotation(self, mock_call_llm):
+        """Happy path: generate rotation keyframes."""
+        mock_call_llm.return_value = _make_valid_response(2, 32)
 
         node = MotionDirectorNode()
-        batch, kf_json, pose_kpts, rotations_json = node.generate(
-            keypoints=json.dumps(kpts),
+        batch, kf_json, rotations_json = node.generate(
             motion_description="wave",
             num_keyframes=2,
             total_frames=32,
             base_url="http://test/v1",
             model="m",
-            width=512,
-            height=512,
-            output_mode="keypoints",
+            width=256,
+            height=256,
         )
 
-        assert batch.shape[0] == 2  # 2 keyframes in batch
-        assert batch.shape[1] == 512  # height
-        assert batch.shape[2] == 512  # width
-        assert batch.shape[3] == 3   # channels
+        assert batch.shape[0] == 2  # 2 keyframes
+        assert batch.shape[3] == 3  # RGB
         assert isinstance(kf_json, str)
-        assert len(pose_kpts) == 2
-        assert pose_kpts[0]["frame"] == 0
+        assert isinstance(rotations_json, str)
+        kf_data = json.loads(kf_json)
+        assert len(kf_data["keyframes"]) == 2
 
     @patch("pose_director_root.nodes.motion_director.call_llm")
-    def test_generate_with_pose_keypoint(self, mock_call_llm):
-        """Extract keypoints from POSE_KEYPOINT input instead of STRING."""
-        kpts = _make_coco18_keypoints()
-        mock_call_llm.return_value = json.dumps({
+    def test_generate_partial_rotations_filled(self, mock_call_llm):
+        """LLM outputs only changed joints — missing ones filled from prev frame."""
+        response = json.dumps({
             "keyframes": [
-                {"frame": 0, "keypoints": kpts},
+                {"frame": 0, "rotations": dict(VALID_ROTATIONS)},
+                {"frame": 16, "rotations": {"right_shoulder": [0, 0, 180]}},
             ]
         })
-
-        pose_keypoint = {
-            "people": [{"pose_keypoints_2d": kpts}],
-            "canvas_height": 1024,
-            "canvas_width": 768,
-        }
+        mock_call_llm.return_value = response
 
         node = MotionDirectorNode()
-        batch, kf_json, pose_kpts, rotations_json = node.generate(
-            keypoints="[]",
-            motion_description="wave",
-            num_keyframes=1,
-            total_frames=16,
+        batch, kf_json, _ = node.generate(
+            motion_description="raise arm",
+            num_keyframes=2,
+            total_frames=32,
             base_url="http://test/v1",
             model="m",
-            width=512,
-            height=512,
-            pose_keypoint=pose_keypoint,
-            output_mode="keypoints",
+            width=256,
+            height=256,
         )
 
-        # Should have extracted canvas dimensions from pose_keypoint
-        assert batch.shape[1] == 1024  # height from pose_keypoint
-        assert batch.shape[2] == 768   # width from pose_keypoint
-        assert len(pose_kpts) == 1
-        assert pose_kpts[0]["canvas_height"] == 1024
+        assert batch.shape[0] == 2
+        kf_data = json.loads(kf_json)
+        # Frame 1 should have all 15 joints filled from frame 0
+        frame1_rots = kf_data["keyframes"][1]["rotations"]
+        assert "left_shoulder" in frame1_rots
+        assert frame1_rots["right_shoulder"] == [0, 0, 180]
 
     @patch("pose_director_root.nodes.motion_director.call_llm")
     def test_generate_list_wrap_unwrap(self, mock_call_llm):
         """LLM may return a list wrapping the dict — unwrap it."""
-        kpts = _make_coco18_keypoints()
-        mock_call_llm.return_value = json.dumps([{
-            "keyframes": [
-                {"frame": 0, "keypoints": kpts},
-            ]
-        }])
+        mock_call_llm.return_value = json.dumps([json.loads(_make_valid_response(1, 16))])
 
         node = MotionDirectorNode()
-        batch, _, _, _ = node.generate(
-            keypoints=json.dumps(kpts),
+        batch, _, _ = node.generate(
             motion_description="wave",
             num_keyframes=1,
             total_frames=16,
             base_url="http://test/v1",
             model="m",
-            width=512,
-            height=512,
-            output_mode="keypoints",
+            width=128,
+            height=128,
         )
-
         assert batch.shape[0] == 1
 
     @patch("pose_director_root.nodes.motion_director.call_llm")
-    def test_generate_base_pose_not_found(self, mock_call_llm):
-        """Non-existent base_pose should be skipped with a warning."""
-        kpts = _make_coco18_keypoints()
-        mock_call_llm.return_value = json.dumps({
-            "keyframes": [{"frame": 0, "keypoints": kpts}]
+    def test_generate_missing_joints_triggers_retry(self, mock_call_llm):
+        """Missing joints on first attempt → retry with error feedback."""
+        bad_response = json.dumps({
+            "keyframes": [
+                {"frame": 0, "rotations": {"spine": [0, 0, 0]}},
+            ]
         })
+        good_response = _make_valid_response(1, 16)
+        mock_call_llm.side_effect = [bad_response, good_response]
 
         node = MotionDirectorNode()
-        batch, _, _, _ = node.generate(
-            keypoints=json.dumps(kpts),
+        batch, _, _ = node.generate(
             motion_description="wave",
             num_keyframes=1,
             total_frames=16,
             base_url="http://test/v1",
             model="m",
-            width=512,
-            height=512,
-            base_pose="nonexistent_pose",
-            output_mode="keypoints",
+            width=128,
+            height=128,
+            max_retries=1,
         )
+        assert batch.shape[0] == 1
+        assert mock_call_llm.call_count == 2
 
+    @patch("pose_director_root.nodes.motion_director.call_llm")
+    def test_generate_parse_error_triggers_retry(self, mock_call_llm):
+        """Unparseable response → retry."""
+        bad_response = "This is not JSON at all"
+        good_response = _make_valid_response(1, 16)
+        mock_call_llm.side_effect = [bad_response, good_response]
+
+        node = MotionDirectorNode()
+        batch, _, _ = node.generate(
+            motion_description="wave",
+            num_keyframes=1,
+            total_frames=16,
+            base_url="http://test/v1",
+            model="m",
+            width=128,
+            height=128,
+            max_retries=1,
+        )
+        assert batch.shape[0] == 1
+        assert mock_call_llm.call_count == 2
+
+    @patch("pose_director_root.nodes.motion_director.call_llm")
+    def test_generate_all_retries_exhausted(self, mock_call_llm):
+        """All retries fail → uses best-effort last parsed result."""
+        bad_response = json.dumps({
+            "keyframes": [
+                {"frame": 0, "rotations": {"spine": [0, 0, 0], "neck": [0, 0, 0]}},
+            ]
+        })
+        mock_call_llm.return_value = bad_response
+
+        node = MotionDirectorNode()
+        batch, _, _ = node.generate(
+            motion_description="wave",
+            num_keyframes=1,
+            total_frames=16,
+            base_url="http://test/v1",
+            model="m",
+            width=128,
+            height=128,
+            max_retries=0,
+        )
+        # Should still produce output (best effort after sanitization)
         assert batch.shape[0] == 1
 
     @patch("pose_director_root.nodes.motion_director.call_llm")
-    @patch("pose_director_root.nodes.motion_director.validate_keypoints")
-    def test_generate_validation_warnings(self, mock_validate, mock_call_llm):
-        """Validation issues should be logged but not block execution."""
-        kpts = _make_coco18_keypoints()
-        mock_call_llm.return_value = json.dumps({
+    def test_generate_sanitizes_extreme_angles(self, mock_call_llm):
+        """Extreme angles get clamped to anatomical limits."""
+        extreme_rotations = dict(VALID_ROTATIONS)
+        extreme_rotations["right_knee"] = [-50, 0, 0]  # backward bend
+        extreme_rotations["left_elbow"] = [0, 0, 200]   # over-bend
+
+        response = json.dumps({
             "keyframes": [
-                {"frame": 0, "keypoints": kpts},
-                {"frame": 8, "keypoints": kpts},
+                {"frame": 0, "rotations": extreme_rotations},
             ]
         })
-
-        # Simulate validation finding issues
-        mock_issue = MagicMock()
-        mock_issue.severity = "warning"
-        mock_issue.message = "test issue"
-        mock_validate.return_value = (False, [mock_issue])
+        mock_call_llm.return_value = response
 
         node = MotionDirectorNode()
-        batch, _, _, _ = node.generate(
-            keypoints=json.dumps(kpts),
-            motion_description="wave",
-            num_keyframes=2,
+        _, _, rotations_json = node.generate(
+            motion_description="extreme pose",
+            num_keyframes=1,
             total_frames=16,
             base_url="http://test/v1",
             model="m",
-            width=512,
-            height=512,
-            output_mode="keypoints",
+            width=128,
+            height=128,
         )
 
-        assert batch.shape[0] == 2
-        assert mock_validate.call_count == 2
+        rots = json.loads(rotations_json)
+        # Knee should be clamped to min -5
+        assert rots[0]["right_knee"][0] >= -5
+        # Elbow should be clamped to max 145
+        assert rots[0]["left_elbow"][2] <= 145
 
-    @patch("pose_director_root.nodes.motion_director.call_llm")
-    @patch("pose_director_root.nodes.motion_director.validate_keyframe_consistency")
-    def test_generate_consistency_warnings(self, mock_consistency, mock_call_llm):
-        """Keyframe consistency issues should be logged but not block."""
-        kpts = _make_coco18_keypoints()
-        mock_call_llm.return_value = json.dumps({
-            "keyframes": [
-                {"frame": 0, "keypoints": kpts},
-                {"frame": 8, "keypoints": kpts},
-            ]
-        })
+    def test_generate_no_pose_keypoint_input(self):
+        """MotionDirector should not accept pose_keypoint input."""
+        inputs = MotionDirectorNode.INPUT_TYPES()
+        assert "pose_keypoint" not in inputs.get("required", {})
+        assert "pose_keypoint" not in inputs.get("optional", {})
 
-        mock_consistency.return_value = {
-            "is_consistent": False,
-            "flagged_bones": [("bone1", 0.5, 0.8)],
-        }
+    def test_generate_no_output_mode_input(self):
+        """MotionDirector should not have output_mode input."""
+        inputs = MotionDirectorNode.INPUT_TYPES()
+        assert "output_mode" not in inputs.get("required", {})
+        assert "output_mode" not in inputs.get("optional", {})
 
-        node = MotionDirectorNode()
-        batch, _, _, _ = node.generate(
-            keypoints=json.dumps(kpts),
-            motion_description="wave",
-            num_keyframes=2,
-            total_frames=16,
-            base_url="http://test/v1",
-            model="m",
-            width=512,
-            height=512,
-            output_mode="keypoints",
-        )
-
-        assert batch.shape[0] == 2
-        mock_consistency.assert_called_once()
-
-    def test_generate_keypoints_as_list(self):
-        """keypoints can be passed as a list, not just a JSON string."""
-        kpts = _make_coco18_keypoints()
-        with patch("pose_director_root.nodes.motion_director.call_llm") as mock_llm:
-            mock_llm.return_value = json.dumps({
-                "keyframes": [{"frame": 0, "keypoints": kpts}]
-            })
-            node = MotionDirectorNode()
-            batch, _, _, _ = node.generate(
-                keypoints=kpts,  # pass list directly
-                motion_description="wave",
-                num_keyframes=1,
-                total_frames=16,
-                base_url="http://test/v1",
-                model="m",
-                width=256,
-                height=256,
-                output_mode="keypoints",
-            )
-            assert batch.shape[0] == 1
-
-    def test_generate_total_frames_one_keyframe(self):
-        """Edge case: only 1 keyframe should still work."""
-        kpts = _make_coco18_keypoints()
-        with patch("pose_director_root.nodes.motion_director.call_llm") as mock_llm:
-            mock_llm.return_value = json.dumps({
-                "keyframes": [{"frame": 0, "keypoints": kpts}]
-            })
-            node = MotionDirectorNode()
-            batch, _, _, _ = node.generate(
-                keypoints=json.dumps(kpts),
-                motion_description="wave",
-                num_keyframes=1,
-                total_frames=16,
-                base_url="http://test/v1",
-                model="m",
-                width=128,
-                height=128,
-                output_mode="keypoints",
-            )
-            assert batch.shape[0] == 1
+    def test_output_types(self):
+        """Should have 3 outputs: IMAGE, STRING, STRING."""
+        assert MotionDirectorNode.RETURN_TYPES == ("IMAGE", "STRING", "STRING")
+        assert MotionDirectorNode.OUTPUT_NAMES == ("pose_batch", "keyframes_json", "rotations_json")

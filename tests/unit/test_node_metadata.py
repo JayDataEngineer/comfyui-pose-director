@@ -80,11 +80,12 @@ class TestSpecificNodeMetadata:
     def test_motion_director_inputs(self):
         inputs = MotionDirectorNode.INPUT_TYPES()
         required = inputs["required"]
-        assert "keypoints" in required
         assert "motion_description" in required
         assert "num_keyframes" in required
         assert "total_frames" in required
-        assert "pose_keypoint" in inputs.get("optional", {})
+        assert "keypoints" not in required  # removed — rotation-only
+        assert "pose_keypoint" not in inputs.get("optional", {})  # removed
+        assert "output_mode" not in inputs.get("optional", {})  # removed
 
     def test_pose_renderer_inputs(self):
         inputs = PoseRendererNode.INPUT_TYPES()
@@ -112,11 +113,9 @@ class TestSpecificNodeMetadata:
     def test_pose_manipulator_returns_image(self):
         assert PoseManipulatorNode.RETURN_TYPES[0] == "IMAGE"
 
-    def test_motion_director_returns_image_batch(self):
-        assert MotionDirectorNode.RETURN_TYPES[0] == "IMAGE"
-        assert MotionDirectorNode.RETURN_TYPES[1] == "STRING"
-        assert MotionDirectorNode.RETURN_TYPES[2] == "POSE_KEYPOINT"
-        assert MotionDirectorNode.RETURN_TYPES[3] == "STRING"
+    def test_motion_director_returns_three_outputs(self):
+        assert MotionDirectorNode.RETURN_TYPES == ("IMAGE", "STRING", "STRING")
+        assert MotionDirectorNode.OUTPUT_NAMES == ("pose_batch", "keyframes_json", "rotations_json")
 
     def test_keyframe_reviewer_returns_bool(self):
         assert KeyframeReviewerNode.RETURN_TYPES[1] == "BOOLEAN"

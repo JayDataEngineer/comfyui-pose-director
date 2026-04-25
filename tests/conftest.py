@@ -262,23 +262,16 @@ def skeleton_keypoints(comfyui, character_image):
 
 
 @pytest.fixture(scope="session")
-def motion_keyframes(comfyui, character_image, skeleton_keypoints, llm_config):
-    """Generate motion keyframes using MotionDirector. Returns the workflow result.
-
-    Note: MotionDirector outputs (IMAGE, STRING, POSE_KEYPOINT). Only IMAGE is
-    tracked in ComfyUI history. The STRING output won't appear in history outputs.
-    We verify success via the SaveImage node that captures the IMAGE batch.
-    """
+def motion_keyframes(comfyui, llm_config):
+    """Generate motion keyframes using MotionDirector (rotation-only). Returns the workflow result."""
     llm_url, llm_model, llm_key = llm_config
     workflow = load_ui_workflow(WORKFLOWS_DIR / "01_motion_keyframes_rotation.json")
     patch_ui_workflow(workflow, {
-        "LoadImage": {"image": "PoseDirector/character.png"},
         "MotionDirector": {
             "motion_description": "Character waves their right hand in a friendly greeting",
             "num_keyframes": 4,
             "total_frames": 32,
             "base_url": llm_url,
-            "api_key": llm_key,
             "model": llm_model,
         },
         "PreviewImage": {"filename_prefix": "pytest/motion_keyframes"},

@@ -177,24 +177,20 @@ def stage_a_character(run_dir: Path) -> bytes:
     return images[0]
 
 
-def stage_c_keyframes(character_png: bytes, run_dir: Path) -> list:
-    """Stage C: Extract pose and generate motion keyframes via MotionDirector."""
+def stage_c_keyframes(run_dir: Path) -> list:
+    """Stage C: Generate motion keyframes via MotionDirector (rotation mode)."""
     log("=" * 50)
-    log("STAGE C: Pose Extraction + MotionDirector (rotation mode)")
+    log("STAGE C: MotionDirector (rotation mode)")
     log("=" * 50)
-
-    upload_image(character_png, "character.png", "PoseDirector")
 
     llm_url, llm_model, llm_key = get_llm_config()
     workflow = load_ui_workflow(WORKFLOWS_DIR / "01_motion_keyframes_rotation.json")
     patch_ui_workflow(workflow, {
-        "LoadImage": {"image": "PoseDirector/character.png"},
         "MotionDirector": {
             "motion_description": "Character waves their right hand in a friendly greeting",
             "num_keyframes": 4,
             "total_frames": 32,
             "base_url": llm_url,
-            "api_key": llm_key,
             "model": llm_model,
         },
         "PreviewImage": {"filename_prefix": "pipeline/keyframes"},
@@ -316,7 +312,7 @@ def main():
 
     # Stage C
     t0 = time.time()
-    keyframe_images = stage_c_keyframes(character, run_dir)
+    keyframe_images = stage_c_keyframes(run_dir)
     log(f"Stage C completed in {time.time()-t0:.1f}s")
 
     # Stage D

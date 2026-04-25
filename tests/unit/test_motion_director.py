@@ -32,7 +32,7 @@ class TestMotionDirectorGenerate:
         })
 
         node = MotionDirectorNode()
-        batch, kf_json, pose_kpts = node.generate(
+        batch, kf_json, pose_kpts, rotations_json = node.generate(
             keypoints=json.dumps(kpts),
             motion_description="wave",
             num_keyframes=2,
@@ -42,6 +42,7 @@ class TestMotionDirectorGenerate:
             model="m",
             width=512,
             height=512,
+            output_mode="keypoints",
         )
 
         assert batch.shape[0] == 2  # 2 keyframes in batch
@@ -69,7 +70,7 @@ class TestMotionDirectorGenerate:
         }
 
         node = MotionDirectorNode()
-        batch, kf_json, pose_kpts = node.generate(
+        batch, kf_json, pose_kpts, rotations_json = node.generate(
             keypoints="[]",
             motion_description="wave",
             num_keyframes=1,
@@ -80,6 +81,7 @@ class TestMotionDirectorGenerate:
             width=512,
             height=512,
             pose_keypoint=pose_keypoint,
+            output_mode="keypoints",
         )
 
         # Should have extracted canvas dimensions from pose_keypoint
@@ -99,7 +101,7 @@ class TestMotionDirectorGenerate:
         }])
 
         node = MotionDirectorNode()
-        batch, _, _ = node.generate(
+        batch, _, _, _ = node.generate(
             keypoints=json.dumps(kpts),
             motion_description="wave",
             num_keyframes=1,
@@ -109,6 +111,7 @@ class TestMotionDirectorGenerate:
             model="m",
             width=512,
             height=512,
+            output_mode="keypoints",
         )
 
         assert batch.shape[0] == 1
@@ -122,7 +125,7 @@ class TestMotionDirectorGenerate:
         })
 
         node = MotionDirectorNode()
-        batch, _, _ = node.generate(
+        batch, _, _, _ = node.generate(
             keypoints=json.dumps(kpts),
             motion_description="wave",
             num_keyframes=1,
@@ -133,6 +136,7 @@ class TestMotionDirectorGenerate:
             width=512,
             height=512,
             base_pose="nonexistent_pose",
+            output_mode="keypoints",
         )
 
         assert batch.shape[0] == 1
@@ -156,7 +160,7 @@ class TestMotionDirectorGenerate:
         mock_validate.return_value = (False, [mock_issue])
 
         node = MotionDirectorNode()
-        batch, _, _ = node.generate(
+        batch, _, _, _ = node.generate(
             keypoints=json.dumps(kpts),
             motion_description="wave",
             num_keyframes=2,
@@ -166,6 +170,7 @@ class TestMotionDirectorGenerate:
             model="m",
             width=512,
             height=512,
+            output_mode="keypoints",
         )
 
         assert batch.shape[0] == 2
@@ -189,7 +194,7 @@ class TestMotionDirectorGenerate:
         }
 
         node = MotionDirectorNode()
-        batch, _, _ = node.generate(
+        batch, _, _, _ = node.generate(
             keypoints=json.dumps(kpts),
             motion_description="wave",
             num_keyframes=2,
@@ -199,6 +204,7 @@ class TestMotionDirectorGenerate:
             model="m",
             width=512,
             height=512,
+            output_mode="keypoints",
         )
 
         assert batch.shape[0] == 2
@@ -212,7 +218,7 @@ class TestMotionDirectorGenerate:
                 "keyframes": [{"frame": 0, "keypoints": kpts}]
             })
             node = MotionDirectorNode()
-            batch, _, _ = node.generate(
+            batch, _, _, _ = node.generate(
                 keypoints=kpts,  # pass list directly
                 motion_description="wave",
                 num_keyframes=1,
@@ -222,6 +228,7 @@ class TestMotionDirectorGenerate:
                 model="m",
                 width=256,
                 height=256,
+                output_mode="keypoints",
             )
             assert batch.shape[0] == 1
 
@@ -233,7 +240,7 @@ class TestMotionDirectorGenerate:
                 "keyframes": [{"frame": 0, "keypoints": kpts}]
             })
             node = MotionDirectorNode()
-            batch, _, _ = node.generate(
+            batch, _, _, _ = node.generate(
                 keypoints=json.dumps(kpts),
                 motion_description="wave",
                 num_keyframes=1,
@@ -243,5 +250,6 @@ class TestMotionDirectorGenerate:
                 model="m",
                 width=128,
                 height=128,
+                output_mode="keypoints",
             )
             assert batch.shape[0] == 1

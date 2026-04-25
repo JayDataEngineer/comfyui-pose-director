@@ -12,6 +12,11 @@ VNCCS_INSTRUCTION = (
     "Modify the character's pose to match the skeleton guide shown in Picture 2. "
     "Maintain the character's exact appearance, clothing, and identity."
 )
+VNCCS_INSTRUCTION_MESH = (
+    "Modify the character's pose to match the body shape and pose shown in Picture 2. "
+    "Picture 2 shows a 3D body mesh rendering — match the posture, limb positions, and overall body orientation. "
+    "Maintain the character's exact appearance, clothing, and identity."
+)
 
 DEFAULT_LTX_PROMPT = (
     "A cute anime girl performing a playful dance, waving arms and swaying. "
@@ -95,8 +100,14 @@ def build_motion_director_workflow(
     height: int = 1024,
     keypoints: str = "[]",
     filename_prefix: str = "pipeline/keyframes",
+    output_mode: str = "keypoints",
 ) -> dict:
-    """Build a MotionDirector keyframe generation workflow."""
+    """Build a MotionDirector keyframe generation workflow.
+
+    Args:
+        output_mode: "keypoints" for OpenPose stick figures (legacy),
+                     "rotations" for Anny 3D body mesh renders.
+    """
     return {
         "1": {"class_type": "LoadImage", "inputs": {"image": image_path, "upload": "image"}},
         "2": {"class_type": "OpenposePreprocessor", "inputs": {
@@ -115,6 +126,7 @@ def build_motion_director_workflow(
             "width": width,
             "height": height,
             "pose_keypoint": ["2", 1],
+            "output_mode": output_mode,
         }},
         "4": {"class_type": "SaveImage", "inputs": {"filename_prefix": filename_prefix, "images": ["3", 0]}},
     }
@@ -416,3 +428,34 @@ def build_ltx_video_workflow(
     }
 
     return workflow
+
+
+def build_body_mesh_workflow(
+    rotations_json: str = "{}",
+    width: int = 1024,
+    height: int = 1024,
+    filename_prefix: str = "pipeline/body_mesh",
+) -> dict:
+    """Build a body mesh rendering workflow (Anny + pyrender).
+
+    Takes named joint rotations and renders a deterministic 3D body mesh image.
+    No diffusion — pure geometry. Used as VNCCS image2 input instead of stick figures.
+    """
+    return {
+        "1": {
+            "class_type": "BodyMeshRenderer",
+            "inputs": {
+                "rotations_json": rotations_json,
+                "width": width,
+                "height": height,
+                "backend": "auto",
+            },
+        },
+        "2": {
+            "class_type": "SaveImage",
+            "inputs": {
+                "filename_prefix": filename_prefix,
+                "images": ["1", 0],
+            },
+        },
+    }

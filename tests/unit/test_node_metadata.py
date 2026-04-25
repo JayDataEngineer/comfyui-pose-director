@@ -11,6 +11,7 @@ from pose_director_root.nodes.motion_director import MotionDirectorNode
 from pose_director_root.nodes.pose_renderer import PoseRendererNode
 from pose_director_root.nodes.pose_extractor import PoseExtractorNode
 from pose_director_root.nodes.keyframe_reviewer import KeyframeReviewerNode
+from pose_director_root.nodes.body_mesh_renderer import BodyMeshRendererNode
 
 ALL_NODES = [
     PoseManipulatorNode,
@@ -18,6 +19,7 @@ ALL_NODES = [
     PoseRendererNode,
     PoseExtractorNode,
     KeyframeReviewerNode,
+    BodyMeshRendererNode,
 ]
 
 
@@ -113,7 +115,12 @@ class TestSpecificNodeMetadata:
         assert MotionDirectorNode.RETURN_TYPES[0] == "IMAGE"
         assert MotionDirectorNode.RETURN_TYPES[1] == "STRING"
         assert MotionDirectorNode.RETURN_TYPES[2] == "POSE_KEYPOINT"
+        assert MotionDirectorNode.RETURN_TYPES[3] == "STRING"
 
     def test_keyframe_reviewer_returns_bool(self):
         assert KeyframeReviewerNode.RETURN_TYPES[1] == "BOOLEAN"
         assert KeyframeReviewerNode.RETURN_TYPES[2] == "INT"
+
+    def test_body_mesh_renderer_returns_image(self):
+        assert BodyMeshRendererNode.RETURN_TYPES[0] == "IMAGE"
+        assert len(BodyMeshRendererNode.RETURN_TYPES) == 1

@@ -83,7 +83,7 @@ def submit_workflow(workflow: dict, timeout: int = MAX_WAIT, retries: int = 0) -
 
 def _submit_workflow_once(workflow: dict, timeout: int) -> dict:
     """Single attempt to submit and wait for a workflow."""
-    resp = requests.post(f"{COMFYUI_URL}/prompt", json={"prompt": workflow}, timeout=30)
+    resp = requests.post(f"{COMFYUI_URL}/prompt", json={"prompt": workflow}, timeout=120)
     if resp.status_code != 200:
         raise RuntimeError(f"Submit failed ({resp.status_code}): {resp.text}")
     data = resp.json()
@@ -97,7 +97,7 @@ def _submit_workflow_once(workflow: dict, timeout: int) -> dict:
 
     start = time.time()
     while time.time() - start < timeout:
-        hist = requests.get(f"{COMFYUI_URL}/history/{prompt_id}", timeout=30)
+        hist = requests.get(f"{COMFYUI_URL}/history/{prompt_id}", timeout=120)
         if hist.status_code == 200 and hist.json().get(prompt_id):
             entry = hist.json()[prompt_id]
             status = entry.get("status", {})

@@ -2,8 +2,8 @@
 
 Stages (each is a separate ComfyUI workflow with restart between stages):
   A. Generate character (Z-Image Turbo)
-  C. Extract pose → Generate keyframes (MotionDirector via local LLM)
-  D. Edit ALL keyframes with VNCCS QWEN Encoder (matches 03_static_pose workflow)
+  C. Generate keyframes (MotionDirector in rotation mode → Anny 3D body mesh renders)
+  D. Edit ALL keyframes with VNCCS QWEN Encoder (body mesh as image2)
   E. Assemble video with LTX Video 2.3 using edited character images as guides
 
 Skipped unless RUN_E2E=1 env var is set.
@@ -25,7 +25,7 @@ from pipeline.workflows import (
     build_vnccs_edit_workflow,
     build_ltx_video_workflow,
     VNCCS_PROMPT,
-    VNCCS_INSTRUCTION,
+    VNCCS_INSTRUCTION_MESH,
 )
 from pose_director_root.utils.temporal_analysis import analyze_temporal_stability
 
@@ -61,8 +61,8 @@ def e2e_result(comfyui, llm_config):
     # Restart ComfyUI to clear Z-Image model from VRAM
     restart_comfyui()
 
-    # ── Step C: Extract pose + generate keyframes ──────────────────────
-    print("[E2E] Step C: Extracting pose and generating motion keyframes...")
+    # ── Step C: Generate keyframes via rotation mode (Anny body mesh) ──
+    print("[E2E] Step C: Generating motion keyframes (rotation mode → Anny body mesh)...")
     kf_workflow = build_motion_director_workflow(
         image_path="PoseDirector/e2e_character.png",
         motion_description="Character performs a cute anime dance, waving arms and shifting weight side to side with playful poses",
@@ -74,6 +74,7 @@ def e2e_result(comfyui, llm_config):
         width=1024,
         height=1024,
         filename_prefix="e2e/keyframes",
+        output_mode="rotations",
     )
     kf_result = submit_workflow(kf_workflow, timeout=600, retries=2)
     kf_images = get_output_images(kf_result["outputs"], "4")
@@ -97,7 +98,7 @@ def e2e_result(comfyui, llm_config):
             seed=42,
             steps=40,
             prompt=VNCCS_PROMPT,
-            instruction=VNCCS_INSTRUCTION,
+            instruction=VNCCS_INSTRUCTION_MESH,
             filename_prefix=f"e2e/edited_kf{kf_idx}",
         )
         edit_result = submit_workflow(edit_workflow, timeout=900, retries=2)
@@ -168,10 +169,13 @@ def test_e2e_temporal_stability(e2e_result):
 
     try:
         result = analyze_temporal_stability(tmp_path, threshold=0.85)
-        print(f"[E2E] Temporal stability: score={result['stability_score']:.3f}, "
-              f"frames={result['total_frames']}, flicker={result['flicker_frames']}")
-        assert result["stability_score"] > 0.5, (
-            f"Temporal stability too low: {result['stability_score']:.3f}"
+        score = result["temporal_stability_score"]
+        n_frames = result["num_frames"]
+        flicker = result["flicker_frames"]
+        print(f"[E2E] Temporal stability: score={score:.3f}, "
+              f"frames={n_frames}, flicker={flicker}")
+        assert score > 0.5, (
+            f"Temporal stability too low: {score:.3f}"
         )
     finally:
         import os

@@ -48,6 +48,7 @@ from pipeline.workflows import (
     build_ltx_video_workflow,
     VNCCS_PROMPT,
     VNCCS_INSTRUCTION,
+    VNCCS_INSTRUCTION_MESH,
 )
 
 API_KEY = os.environ.get("GEMINI_API_KEY", "")
@@ -115,10 +116,11 @@ def stage_a_character() -> bytes:
 
 def stage_c_keyframes(character_png: bytes) -> list:
     """Stage C: Extract pose and generate motion keyframes via MotionDirector.
+    Uses rotation mode (Anny body mesh renders) for better VNCCS results.
     Returns list of keyframe image bytes.
     """
     log("=" * 50)
-    log("STAGE C: Pose Extraction + MotionDirector")
+    log("STAGE C: Pose Extraction + MotionDirector (rotation mode)")
     log("=" * 50)
 
     upload_image(character_png, "character.png", "PoseDirector")
@@ -135,6 +137,7 @@ def stage_c_keyframes(character_png: bytes) -> list:
         width=1024,
         height=1024,
         filename_prefix="pipeline/keyframes",
+        output_mode="rotations",
     )
 
     result = submit_workflow(workflow)
@@ -150,9 +153,11 @@ def stage_c_keyframes(character_png: bytes) -> list:
 
 
 def stage_d_edit_keyframes(character_png: bytes, keyframe_images: list) -> list:
-    """Stage D: Edit all keyframes with VNCCS QWEN Encoder."""
+    """Stage D: Edit all keyframes with VNCCS QWEN Encoder.
+    Uses mesh-specific instruction for body mesh keyframe inputs.
+    """
     log("=" * 50)
-    log("STAGE D: VNCCS QWEN Editing")
+    log("STAGE D: VNCCS QWEN Editing (body mesh mode)")
     log("=" * 50)
 
     edited = []
@@ -164,7 +169,7 @@ def stage_d_edit_keyframes(character_png: bytes, keyframe_images: list) -> list:
             seed=42 + i,
             steps=40,
             prompt=VNCCS_PROMPT,
-            instruction=VNCCS_INSTRUCTION,
+            instruction=VNCCS_INSTRUCTION_MESH,
             filename_prefix=f"pipeline/edited_kf{i}",
         )
         result = submit_workflow(workflow)

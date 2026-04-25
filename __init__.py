@@ -4,6 +4,7 @@ try:
     from .nodes.pose_renderer import PoseRendererNode
     from .nodes.pose_extractor import PoseExtractorNode
     from .nodes.keyframe_reviewer import KeyframeReviewerNode
+    from .nodes.body_mesh_renderer import BodyMeshRendererNode
 
     NODE_CLASS_MAPPINGS = {
         "PoseManipulator": PoseManipulatorNode,
@@ -11,6 +12,7 @@ try:
         "PoseRenderer": PoseRendererNode,
         "PoseExtractor": PoseExtractorNode,
         "KeyframeReviewer": KeyframeReviewerNode,
+        "BodyMeshRenderer": BodyMeshRendererNode,
     }
 
     NODE_DISPLAY_NAME_MAPPINGS = {
@@ -19,6 +21,7 @@ try:
         "PoseRenderer": "Pose Renderer",
         "PoseExtractor": "Pose Extractor (DWPose Bridge)",
         "KeyframeReviewer": "Keyframe Reviewer (Vision LLM)",
+        "BodyMeshRenderer": "Body Mesh Renderer (Anny)",
     }
 except ImportError:
     # Not running inside ComfyUI's custom_nodes package context

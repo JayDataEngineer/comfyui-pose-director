@@ -12,6 +12,7 @@ from pose_director_root.nodes.pose_renderer import PoseRendererNode
 from pose_director_root.nodes.pose_extractor import PoseExtractorNode
 from pose_director_root.nodes.keyframe_reviewer import KeyframeReviewerNode
 from pose_director_root.nodes.body_mesh_renderer import BodyMeshRendererNode
+from pose_director_root.nodes.prompt_enhancer import PromptEnhancerNode
 
 ALL_NODES = [
     PoseManipulatorNode,
@@ -20,6 +21,7 @@ ALL_NODES = [
     PoseExtractorNode,
     KeyframeReviewerNode,
     BodyMeshRendererNode,
+    PromptEnhancerNode,
 ]
 
 

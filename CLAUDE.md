@@ -105,29 +105,38 @@ The ComfyUI Agent MCP server is configured in `.mcp.json` at project root. It pr
 ## End-to-End Pipeline
 
 ```
-A. Character Concept    Z-Image Turbo (768x1024) → character.png
+A. Character Concept    Z-Image Turbo (768x1024) → character.png          [00_z_image_character.json]
 B. Character Sheet      VNCCS QWEN Edit → turnaround sheet (not yet implemented)
-C. Pose Manipulation    OpenposePreprocessor → PoseManipulator/MotionDirector → skeleton keyframes  ← THIS EXTENSION
-D. Pose → Character     VNCCS_QWEN_Encoder(image1=char, image2=skeleton) → edited keyframes
-E. Video Assembly       LTX Video 2.3 with keyframe guides → MP4
-F. Post-Processing      LTX EditAnything IC-LoRA → fix artifacts
-G. Lip Sync             InfiniteTalk (not yet installed)
+C. Pose Manipulation    OpenposePreprocessor → MotionDirector → Anny body mesh keyframes  [01_motion_keyframes_rotation.json]
+D. Pose → Character     VNCCS_QWEN_Encoder(image1=char, image2=mesh) → edited keyframes   [02_vnccs_edit_keyframe.json]
+E. Video Assembly       LTX Video 2.3 with keyframe guides → MP4                         [04_ltx_video_assembly.json]
+F. Post-Processing      LTX EditAnything IC-LoRA → fix artifacts                          [06_ltx_edit_anything_postprocess.json]
+G. Lip Sync             InfiniteTalk (not yet installed)                                 [07_lip_sync.json]
 ```
 
-### Workflow Files
+### Workflow Files (Source of Truth)
+
+All workflows are in **ComfyUI UI format** — load them directly in ComfyUI's browser to inspect, edit, and debug. The AIO script and tests convert them to API format on the fly via `pipeline/ui_to_api.py`.
 
 | File | Stage | Description |
 |------|-------|-------------|
 | `00_z_image_character.json` | A | Z-Image Turbo character generation |
-| `01_pose_manipulation.json` | C | Standalone OpenPose → PoseManipulator |
-| `02_motion_keyframes.json` | C | Standalone OpenPose → MotionDirector |
-| `03_static_pose_qwen_edit.json` | C+D | Full static pose pipeline with VNCCS |
-| `04_motion_keyframes_qwen_edit.json` | C+D | Motion keyframes with VNCCS editing |
-| `05_ltx_video_assembly.json` | E | LTX Video 2.3 with keyframe guides |
+| `01_motion_keyframes_rotation.json` | C | OpenPose → MotionDirector (rotation mode → Anny 3D mesh) |
+| `02_vnccs_edit_keyframe.json` | D | Single-keyframe VNCCS QWEN editing (character + keyframe → edited) |
+| `02_vnccs_edit_mesh.json` | C+D | Static pose pipeline: OpenPose → PoseManipulator → VNCCS edit |
+| `03_motion_keyframes_qwen_edit_mesh.json` | C+D | Motion keyframes with VNCCS editing (batch split version) |
+| `04_ltx_video_assembly.json` | E | LTX Video 2.3 with keyframe guides |
 | `06_ltx_edit_anything_postprocess.json` | F | Post-processing with IC-LoRA |
 | `07_lip_sync.json` | G | Lip sync (placeholder) |
 
-All workflows are in **ComfyUI UI format** (not API format). The E2E tests construct API-format payloads directly in Python.
+**No more parallel API-format JSONs.** The `pipeline/ui_to_api.py` module handles conversion:
+- `load_ui_workflow(path)` — load UI JSON
+- `patch_ui_workflow(workflow, patches)` — batch-patch widget values by node type
+- `patch_widget_value(workflow, node_type, input_name, value, node_index=0)` — single value patch
+- `patch_connection(workflow, ...)` — add/rewire connections
+- `convert_ui_to_api(workflow)` → API-format dict ready for `/prompt`
+
+The AIO runner (`scripts/run_full_pipeline.py`) loads these files, patches runtime values (image paths, seeds, prompts), converts, submits, and saves per-stage artifacts to `output/run_YYYYMMDD_HHMMSS/{stage_a,stage_c,stage_d,stage_e}/` alongside the patched workflow JSONs.
 
 ---
 

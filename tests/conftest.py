@@ -70,61 +70,15 @@ from pipeline.comfyui_client import (  # noqa: E402
 )
 
 
-def convert_ui_workflow_to_api(ui_json: dict) -> dict:
-    """Convert a ComfyUI UI-format workflow JSON to API format.
+# Re-export the new UI-to-API converter
+from pipeline.ui_to_api import (  # noqa: E402
+    load_ui_workflow,
+    patch_ui_workflow,
+    patch_connection,
+    convert_ui_to_api,
+)
 
-    UI format has "nodes" and "links" arrays.
-    API format is {"node_id": {"class_type": "...", "inputs": {...}}}
-
-    Widget values are mapped to inputs by position. Links are resolved
-    to node references ["source_id", output_index].
-    """
-    nodes_by_id = {}
-    for node in ui_json.get("nodes", []):
-        nodes_by_id[str(node["id"])] = {
-            "class_type": node["type"],
-            "widgets_values": node.get("widgets_values", []),
-        }
-
-    # Build link lookup: link_id -> (source_node_id, source_output, target_node_id, target_input_idx)
-    link_map = {}
-    for link in ui_json.get("links", []):
-        link_id, src_id, src_out, tgt_id, tgt_in, dtype = link
-        link_map[link_id] = {
-            "src_id": str(src_id),
-            "src_out": src_out,
-            "tgt_id": str(tgt_id),
-            "tgt_in": tgt_in,
-            "type": dtype,
-        }
-
-    api_workflow = {}
-    for node_id, node_data in nodes_by_id.items():
-        entry = {"class_type": node_data["class_type"], "inputs": {}}
-
-        # Collect incoming links for this node, sorted by target input index
-        incoming = []
-        for link_id, link in link_map.items():
-            if link["tgt_id"] == node_id:
-                incoming.append(link)
-        incoming.sort(key=lambda l: l["tgt_in"])
-
-        # Determine how many inputs come from links vs widgets
-        num_link_inputs = len(incoming)
-
-        # Add link inputs
-        for link in incoming:
-            entry["inputs"][f"input_{link['tgt_in']}"] = [link["src_id"], link["src_out"]]
-
-        # Add widget values for inputs NOT covered by links
-        widget_vals = node_data.get("widgets_values", [])
-        for idx, val in enumerate(widget_vals):
-            input_key = f"input_{num_link_inputs + idx}"
-            entry["inputs"][input_key] = val
-
-        api_workflow[node_id] = entry
-
-    return api_workflow
+WORKFLOWS_DIR = PROJECT_ROOT / "workflows"
 
 
 # --- Pytest markers ---
@@ -231,11 +185,23 @@ def llm_config(gemini_api_key):
 def character_image(comfyui):
     """Generate a character image using Z-Image Turbo. Shared across tests."""
     from PIL import Image
-    from pipeline.workflows import build_character_workflow
 
-    workflow = build_character_workflow(filename_prefix="pytest/character")
-    result = submit_workflow(workflow, timeout=300)
-    images = get_output_images(result["outputs"], "14")
+    workflow = load_ui_workflow(WORKFLOWS_DIR / "00_z_image_character.json")
+    # Fix missing VAEDecode→SaveImage connection if needed
+    save_node = next((n for n in workflow["nodes"] if n["type"] == "SaveImage"), None)
+    vaedecode_node = next((n for n in workflow["nodes"] if n["type"] == "VAEDecode"), None)
+    if save_node and vaedecode_node and save_node.get("inputs", [{}])[0].get("link") is None:
+        patch_connection(
+            workflow,
+            target_node_id=save_node["id"],
+            target_input_name="images",
+            source_node_id=vaedecode_node["id"],
+            source_output_index=0,
+        )
+    patch_ui_workflow(workflow, {"SaveImage": {"filename_prefix": "pytest/character"}})
+    api = convert_ui_to_api(workflow)
+    result = submit_workflow(api, timeout=300)
+    images = get_output_images(result["outputs"], str(save_node["id"]))
     assert len(images) > 0, "No character image generated"
     assert len(images[0]) > 10000, "Character image too small"
 
@@ -255,15 +221,21 @@ def skeleton_keypoints(comfyui, character_image):
     We use the OpenposePreprocessor's openpose_json (from UI output) and also
     save a rendered skeleton to verify the pipeline works.
     """
-    from pipeline.workflows import build_pose_extraction_workflow
-
-    workflow = build_pose_extraction_workflow(
-        image_path="PoseDirector/character.png",
-        resolution=1024,
-        include_renderer=True,
-        filename_prefix_skeleton="pytest/extractor_skeleton",
-        filename_prefix_openpose="pytest/openpose_skeleton",
-    )
+    workflow = {
+        "1": {"class_type": "LoadImage", "inputs": {"image": "PoseDirector/character.png", "upload": "image"}},
+        "2": {"class_type": "OpenposePreprocessor", "inputs": {
+            "image": ["1", 0],
+            "detect_hand": "enable", "detect_body": "enable", "detect_face": "disable",
+            "resolution": 1024,
+        }},
+        "3": {"class_type": "PoseExtractor", "inputs": {"pose_keypoint": ["2", 1], "person_index": 0}},
+        "4": {"class_type": "PoseRenderer", "inputs": {
+            "keypoints": ["3", 0],
+            "width": 1024, "height": 1024, "line_width": 4, "point_radius": 6,
+        }},
+        "5": {"class_type": "SaveImage", "inputs": {"filename_prefix": "pytest/extractor_skeleton", "images": ["4", 0]}},
+        "6": {"class_type": "PreviewImage", "inputs": {"filename_prefix": "pytest/openpose_skeleton", "images": ["2", 0]}},
+    }
     result = submit_workflow(workflow, timeout=120)
 
     # Verify the rendered skeleton was produced (proves PoseExtractor worked)
@@ -297,23 +269,24 @@ def motion_keyframes(comfyui, character_image, skeleton_keypoints, llm_config):
     tracked in ComfyUI history. The STRING output won't appear in history outputs.
     We verify success via the SaveImage node that captures the IMAGE batch.
     """
-    from pipeline.workflows import build_motion_director_workflow
-
     llm_url, llm_model, llm_key = llm_config
-    workflow = build_motion_director_workflow(
-        image_path="PoseDirector/character.png",
-        motion_description="Character waves their right hand in a friendly greeting",
-        num_keyframes=4,
-        total_frames=32,
-        llm_url=llm_url,
-        llm_model=llm_model,
-        width=1024,
-        height=1024,
-        filename_prefix="pytest/motion_keyframes",
-    )
-    result = submit_workflow(workflow, timeout=180, retries=2)
+    workflow = load_ui_workflow(WORKFLOWS_DIR / "01_motion_keyframes_rotation.json")
+    patch_ui_workflow(workflow, {
+        "LoadImage": {"image": "PoseDirector/character.png"},
+        "MotionDirector": {
+            "motion_description": "Character waves their right hand in a friendly greeting",
+            "num_keyframes": 4,
+            "total_frames": 32,
+            "base_url": llm_url,
+            "api_key": llm_key,
+            "model": llm_model,
+        },
+        "PreviewImage": {"filename_prefix": "pytest/motion_keyframes"},
+    })
+    api = convert_ui_to_api(workflow)
+    result = submit_workflow(api, timeout=180, retries=2)
 
-    # Verify images were produced
+    # Verify images were produced (PreviewImage node id=4)
     images = get_output_images(result["outputs"], "4")
     assert len(images) > 0, "No keyframe images generated by MotionDirector"
 

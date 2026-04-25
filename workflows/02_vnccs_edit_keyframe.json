@@ -1,0 +1,571 @@
+{
+  "last_node_id": 9,
+  "last_link_id": 15,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        315,
+        314
+      ],
+      "widgets_values": [
+        "character.png",
+        "image"
+      ],
+      "inputs": [
+        {
+          "name": "image",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            6
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "LoadImage",
+      "pos": [
+        0,
+        350
+      ],
+      "size": [
+        315,
+        314
+      ],
+      "widgets_values": [
+        "keyframe_0.png",
+        "image"
+      ],
+      "inputs": [
+        {
+          "name": "image",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            15
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "UnetLoaderGGUF",
+      "pos": [
+        0,
+        400
+      ],
+      "size": [
+        315,
+        100
+      ],
+      "widgets_values": [
+        "Qwen-Image-Edit-2511-Q5_0.gguf"
+      ],
+      "inputs": [
+        {
+          "name": "unet_name",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            11
+          ]
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "CLIPLoader",
+      "pos": [
+        0,
+        550
+      ],
+      "size": [
+        315,
+        80
+      ],
+      "widgets_values": [
+        "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+        "qwen_image"
+      ],
+      "inputs": [
+        {
+          "name": "clip_name",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "type",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "device",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            4
+          ]
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "VAELoader",
+      "pos": [
+        0,
+        670
+      ],
+      "size": [
+        315,
+        60
+      ],
+      "widgets_values": [
+        "qwen_image_vae.safetensors"
+      ],
+      "inputs": [
+        {
+          "name": "vae_name",
+          "type": "COMBO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            5,
+            13
+          ]
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "VNCCS_QWEN_Encoder",
+      "pos": [
+        400,
+        400
+      ],
+      "size": [
+        400,
+        500
+      ],
+      "widgets_values": [
+        "Draw character from image2",
+        1,
+        null,
+        "Character Reference",
+        "Pose Guide",
+        "Picture 3",
+        1024,
+        "lanczos",
+        "center",
+        1.0,
+        1.0,
+        1.0,
+        384,
+        "Modify the character's pose to match the body shape and pose shown in Picture 2. Picture 2 shows a 3D body mesh rendering — match the posture, limb positions, and overall body orientation. Maintain the character's exact appearance, clothing, and identity.",
+        true
+      ],
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 4
+        },
+        {
+          "name": "prompt",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 5
+        },
+        {
+          "name": "latent_image_index",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "image1",
+          "type": "IMAGE",
+          "link": 6
+        },
+        {
+          "name": "image2",
+          "type": "IMAGE",
+          "link": 15
+        },
+        {
+          "name": "image3",
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "image1_name",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "image2_name",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "image3_name",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "target_size",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "upscale_method",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "crop_method",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "weight1",
+          "type": "FLOAT",
+          "link": null
+        },
+        {
+          "name": "weight2",
+          "type": "FLOAT",
+          "link": null
+        },
+        {
+          "name": "weight3",
+          "type": "FLOAT",
+          "link": null
+        },
+        {
+          "name": "vl_size",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "instruction",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "qwen_2511",
+          "type": "BOOLEAN",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "positive",
+          "type": "positive",
+          "links": [
+            8
+          ]
+        },
+        {
+          "name": "negative",
+          "type": "negative",
+          "links": [
+            9
+          ]
+        },
+        {
+          "name": "latent",
+          "type": "latent",
+          "links": [
+            10
+          ]
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "KSampler",
+      "pos": [
+        900,
+        400
+      ],
+      "size": [
+        315,
+        260
+      ],
+      "widgets_values": [
+        42,
+        "fixed",
+        40,
+        1.0,
+        "euler",
+        "simple"
+      ],
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 11
+        },
+        {
+          "name": "seed",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "steps",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "cfg",
+          "type": "FLOAT",
+          "link": null
+        },
+        {
+          "name": "sampler_name",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "scheduler",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 8
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 9
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 10
+        },
+        {
+          "name": "denoise",
+          "type": "FLOAT",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            12
+          ]
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "VAEDecode",
+      "pos": [
+        1300,
+        400
+      ],
+      "size": [
+        210,
+        80
+      ],
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 12
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 13
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            14
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "SaveImage",
+      "pos": [
+        1600,
+        400
+      ],
+      "size": [
+        315,
+        270
+      ],
+      "widgets_values": [
+        "PoseDirector/edited_mesh"
+      ],
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 14
+        },
+        {
+          "name": "filename_prefix",
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": []
+    }
+  ],
+  "links": [
+    [
+      4,
+      4,
+      0,
+      6,
+      0,
+      "CLIP"
+    ],
+    [
+      5,
+      5,
+      0,
+      6,
+      2,
+      "VAE"
+    ],
+    [
+      6,
+      1,
+      0,
+      6,
+      3,
+      "IMAGE"
+    ],
+    [
+      8,
+      6,
+      0,
+      7,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      9,
+      6,
+      1,
+      7,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      10,
+      6,
+      2,
+      7,
+      3,
+      "LATENT"
+    ],
+    [
+      11,
+      3,
+      0,
+      7,
+      0,
+      "MODEL"
+    ],
+    [
+      12,
+      7,
+      0,
+      8,
+      0,
+      "LATENT"
+    ],
+    [
+      13,
+      5,
+      0,
+      8,
+      1,
+      "VAE"
+    ],
+    [
+      14,
+      8,
+      0,
+      9,
+      0,
+      "IMAGE"
+    ],
+    [
+      15,
+      2,
+      0,
+      6,
+      5,
+      "IMAGE"
+    ]
+  ],
+  "config": {},
+  "extra": {
+    "_description": "Static pose editing with VNCCS using BODY MESH instruction (not skeleton). Uses GGUF UNET loader (Q5_0). The instruction tells VNCCS that image2 is a 3D body mesh rendering."
+  },
+  "version": 0.4
+}

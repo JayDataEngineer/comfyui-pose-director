@@ -423,17 +423,17 @@
         {
           "name": "image1",
           "type": "IMAGE",
-          "link": 6
+          "link": 7
         },
         {
           "name": "image2",
           "type": "IMAGE",
-          "link": 7
+          "link": 8
         },
         {
           "name": "image3",
           "type": "IMAGE",
-          "link": 8
+          "link": null
         },
         {
           "name": "image1_name",

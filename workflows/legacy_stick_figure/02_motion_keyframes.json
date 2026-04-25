@@ -197,6 +197,11 @@
           "name": "POSE_KEYPOINT",
           "type": "POSE_KEYPOINT",
           "links": []
+        },
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": []
         }
       ]
     },

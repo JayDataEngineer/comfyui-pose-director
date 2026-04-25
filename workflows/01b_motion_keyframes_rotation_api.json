@@ -1,0 +1,51 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "character.png",
+      "upload": "image"
+    }
+  },
+  "2": {
+    "class_type": "OpenposePreprocessor",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "detect_hand": "enable",
+      "detect_body": "enable",
+      "detect_face": "disable",
+      "resolution": 1024
+    }
+  },
+  "3": {
+    "class_type": "MotionDirector",
+    "inputs": {
+      "keypoints": "[]",
+      "motion_description": "Character waves their right hand in a friendly greeting",
+      "num_keyframes": 4,
+      "total_frames": 32,
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_key": "",
+      "model": "deepseek/deepseek-v4-flash",
+      "width": 1024,
+      "height": 1024,
+      "pose_keypoint": [
+        "2",
+        1
+      ],
+      "output_mode": "rotations"
+    }
+  },
+  "4": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "PoseDirector/keyframes",
+      "images": [
+        "3",
+        0
+      ]
+    }
+  }
+}

@@ -1,6 +1,6 @@
 {
   "last_node_id": 20,
-  "last_link_id": 24,
+  "last_link_id": 28,
   "nodes": [
     {
       "id": 1,
@@ -224,7 +224,9 @@
         {
           "name": "CLIP",
           "type": "CLIP",
-          "links": []
+          "links": [
+            28
+          ]
         }
       ]
     },
@@ -288,7 +290,7 @@
         {
           "name": "clip",
           "type": "CLIP",
-          "link": null
+          "link": 28
         }
       ],
       "outputs": [
@@ -874,7 +876,7 @@
     },
     {
       "id": 16,
-      "type": "VHSVideoCombine",
+      "type": "VHS_VideoCombine",
       "pos": [
         1500,
         300
@@ -887,14 +889,48 @@
         "PoseDirector/output",
         24,
         0,
-        "auto",
-        "libx264",
-        "mp4",
+        "video/h264-mp4",
         false,
         false
       ],
-      "_comment": "Combine frames into video. 24 fps, mp4 output.",
-      "inputs": [],
+      "_comment": "Combine frames into video. 24 fps, h264 mp4 output.",
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 27
+        },
+        {
+          "name": "filename_prefix",
+          "type": "STRING",
+          "link": null
+        },
+        {
+          "name": "frame_rate",
+          "type": "FLOAT",
+          "link": null
+        },
+        {
+          "name": "loop_count",
+          "type": "INT",
+          "link": null
+        },
+        {
+          "name": "format",
+          "type": "COMBO",
+          "link": null
+        },
+        {
+          "name": "pingpong",
+          "type": "BOOLEAN",
+          "link": null
+        },
+        {
+          "name": "save_output",
+          "type": "BOOLEAN",
+          "link": null
+        }
+      ],
       "outputs": []
     }
   ],
@@ -1114,6 +1150,14 @@
       16,
       0,
       "IMAGE"
+    ],
+    [
+      28,
+      6,
+      0,
+      8,
+      0,
+      "CLIP"
     ]
   ],
   "config": {},

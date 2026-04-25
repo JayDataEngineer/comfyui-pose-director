@@ -90,8 +90,14 @@ def validate_rotations(keyframes: list[dict]) -> tuple[bool, list[ValidationIssu
         # Missing joints
         missing = required_set - present
         if missing:
-            issues.append(ValidationIssue("error", "structure",
-                f"Keyframe {i} missing joints: {sorted(missing)}"))
+            if i == 0:
+                # Frame 0 must have all joints (it's the anchor)
+                issues.append(ValidationIssue("error", "structure",
+                    f"Keyframe 0 missing joints: {sorted(missing)}"))
+            else:
+                # Later keyframes can be partial (filled from previous frame)
+                issues.append(ValidationIssue("warning", "structure",
+                    f"Keyframe {i} missing joints (will inherit from prev): {sorted(missing)}"))
 
         # Hallucinated joints
         extra = present - required_set

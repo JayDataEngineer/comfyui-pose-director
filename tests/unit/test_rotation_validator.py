@@ -33,12 +33,23 @@ class TestValidateRotations:
         assert not valid
         assert any("missing 'rotations'" in i.message for i in issues)
 
-    def test_missing_joints(self):
+    def test_missing_joints_frame0_error(self):
+        """Frame 0 missing joints is an error."""
         kfs = [{"frame": 0, "rotations": {"spine": [0, 0, 0]}}]
         valid, issues = validate_rotations(kfs)
         assert not valid
-        missing_msgs = [i for i in issues if "missing joints" in i.message]
+        missing_msgs = [i for i in issues if "missing joints" in i.message and i.severity == "error"]
         assert len(missing_msgs) == 1
+
+    def test_missing_joints_later_frame_warning(self):
+        """Later keyframes missing joints is a warning (gets filled from prev)."""
+        kfs = [
+            {"frame": 0, "rotations": {j: [0, 0, 0] for j in REQUIRED_JOINTS}},
+            {"frame": 16, "rotations": {"spine": [0, 0, 0]}},
+        ]
+        valid, issues = validate_rotations(kfs)
+        assert valid  # warnings don't block
+        assert any("will inherit" in i.message for i in issues)
 
     def test_extra_joints_warning(self):
         rots = {j: [0, 0, 0] for j in REQUIRED_JOINTS}

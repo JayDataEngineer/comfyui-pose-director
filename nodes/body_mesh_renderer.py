@@ -26,6 +26,7 @@ class BodyMeshRendererNode:
                 "rotations_json": ("STRING", {"default": "{}", "multiline": True}),
                 "width": ("INT", {"default": 1024, "min": 256, "max": 2048}),
                 "height": ("INT", {"default": 1024, "min": 256, "max": 2048}),
+                "model_rotation_y": ("FLOAT", {"default": 0.0, "min": -360.0, "max": 360.0, "step": 1.0}),
             },
             "optional": {
                 "backend": (["auto", "pyrender", "pil"], {"default": "auto"}),
@@ -38,7 +39,7 @@ class BodyMeshRendererNode:
     CATEGORY = "pose_director"
     DESCRIPTION = "Render a 3D body mesh from named joint rotations (Anny model)."
 
-    def render(self, rotations_json, width, height, backend="auto"):
+    def render(self, rotations_json, width, height, model_rotation_y=0.0, backend="auto"):
         rotations = json.loads(rotations_json) if isinstance(rotations_json, str) else rotations_json
 
         # Run Anny forward pass
@@ -47,7 +48,7 @@ class BodyMeshRendererNode:
         faces = get_faces().cpu().numpy()  # (27420, 3)
 
         # Render to 2D image
-        image = render_mesh(vertices, faces, width, height, backend=backend)
+        image = render_mesh(vertices, faces, width, height, backend=backend, model_rotation_y=model_rotation_y)
 
         # Convert to ComfyUI tensor format: (1, H, W, 3) float32 [0, 1]
         tensor = torch.from_numpy(image.astype(np.float32) / 255.0).unsqueeze(0)

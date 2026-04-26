@@ -155,12 +155,36 @@ def render_mesh_pil(
     return np.array(img)
 
 
+def _rotate_vertices_y(vertices: np.ndarray, angle_deg: float) -> np.ndarray:
+    """Rotate vertices around the Y-axis (vertical in Z-up convention).
+
+    Args:
+        vertices: (V, 3) vertex positions.
+        angle_deg: Rotation angle in degrees. Positive = clockwise from above.
+            0° = front, 90° = right-facing, 180° = back, 270° = left-facing.
+
+    Returns:
+        Rotated vertices (same shape).
+    """
+    if abs(angle_deg) < 0.01:
+        return vertices
+    theta = np.radians(angle_deg)
+    cos_t, sin_t = np.cos(theta), np.sin(theta)
+    rot = np.array([
+        [cos_t,  0, sin_t],
+        [0,      1, 0    ],
+        [-sin_t, 0, cos_t],
+    ], dtype=np.float64)
+    return vertices @ rot.T
+
+
 def render_mesh(
     vertices: np.ndarray,
     faces: np.ndarray,
     width: int = 1024,
     height: int = 1024,
     backend: str = "auto",
+    model_rotation_y: float = 0.0,
 ) -> np.ndarray:
     """Render a 3D mesh to 2D image.
 
@@ -170,12 +194,17 @@ def render_mesh(
         width: Output image width.
         height: Output image height.
         backend: "pyrender", "pil", or "auto" (try pyrender, fall back to PIL).
+        model_rotation_y: Rotate entire body around Y-axis in degrees.
+            0=front, 90=right, 180=back, 270=left.
 
     Returns:
         (H, W, 3) uint8 numpy array.
     """
     vertices = np.asarray(vertices, dtype=np.float64)
     faces = np.asarray(faces, dtype=np.int32)
+
+    # Apply whole-body rotation
+    vertices = _rotate_vertices_y(vertices, model_rotation_y)
 
     if backend == "auto":
         try:

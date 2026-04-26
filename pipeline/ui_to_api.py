@@ -142,7 +142,7 @@ NODE_SCHEMAS: dict[str, list[str]] = {
     "PoseRenderer": ["keypoints", "width", "height", "line_width", "point_radius"],
     "PoseExtractor": ["pose_keypoint", "person_index"],
     "KeyframeReviewer": ["images", "review_prompt", "pass_threshold", "base_url", "model"],
-    "BodyMeshRenderer": ["rotations_json", "width", "height", "backend"],
+    "BodyMeshRenderer": ["rotations_json", "width", "height", "model_rotation_y", "backend"],
     "PromptEnhancer": ["prompt", "variant", "base_url", "model"],
     "AnimationExporter": [
         "rotations_json",

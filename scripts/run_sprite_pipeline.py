@@ -102,6 +102,7 @@ def run_sprite_pipeline(
     character_image: str = "PoseDirector/character.png",
     character_bytes: bytes | None = None,
     pose_name: str = "Hi",
+    direction: str | None = None,
     seed: int | None = None,
     rotations_override: str | None = None,
 ):
@@ -109,9 +110,19 @@ def run_sprite_pipeline(
     if seed is None:
         seed = random.randint(0, 999999)
 
+    # Direction → Y-axis rotation
+    dir_map = {
+        "front": 0.0,
+        "right": 90.0,
+        "back": 180.0,
+        "left": 270.0,
+    }
+    model_rotation_y = dir_map.get(direction, 0.0) if direction else 0.0
+
     # Setup output directory
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = PROJECT_ROOT / "output" / f"sprite_{ts}"
+    dir_suffix = f"_{direction}" if direction else ""
+    run_dir = PROJECT_ROOT / "output" / f"sprite_{ts}{dir_suffix}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # Verify ComfyUI is up
@@ -137,11 +148,17 @@ def run_sprite_pipeline(
         log(f"Loaded pose '{pose_name}': {len(pose.get('bones', {}))} bones")
         rotations_json = pose_to_rotations_json(pose)
 
+    if direction:
+        log(f"Direction: {direction} → Y rotation {model_rotation_y}°")
+
     # Load and patch workflow
     workflow = load_ui_workflow(WORKFLOWS_DIR / "05_sprite_bodymesh_edit.json")
     patch_ui_workflow(workflow, {
         "LoadImage": {"image": character_image},
-        "BodyMeshRenderer": {"rotations_json": rotations_json},
+        "BodyMeshRenderer": {
+            "rotations_json": rotations_json,
+            "model_rotation_y": model_rotation_y,
+        },
         "VNCCS_QWEN_Encoder": {
             "prompt": VNCCS_PROMPT,
             "instruction": VNCCS_INSTRUCTION,
@@ -190,12 +207,18 @@ def main():
     parser = argparse.ArgumentParser(description="Run sprite pipeline E2E")
     parser.add_argument("--pose", default="Hi", help="Pose name from VNCCS PoseLibrary")
     parser.add_argument("--character", default="PoseDirector/character.png", help="Character image path")
+    parser.add_argument("--direction", default=None, help="Direction: front/back/left/right")
     parser.add_argument("--seed", type=int, default=None, help="Random seed")
     args = parser.parse_args()
+
+    if args.direction and args.direction not in ("front", "right", "back", "left"):
+        log(f"Unknown direction '{args.direction}'. Use: front, right, back, left")
+        sys.exit(1)
 
     run_sprite_pipeline(
         character_image=args.character,
         pose_name=args.pose,
+        direction=args.direction,
         seed=args.seed,
     )
 

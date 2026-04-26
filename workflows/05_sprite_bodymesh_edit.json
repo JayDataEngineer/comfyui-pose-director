@@ -31,7 +31,7 @@
         {"name": "IMAGE", "type": "IMAGE", "links": [6, 10]}
       ],
       "properties": {"Node name for S&R": "BodyMeshRenderer"},
-      "widgets_values": ["{}", 1024, 1024, "auto"]
+      "widgets_values": ["{}", 1024, 1024, 0.0, "auto"]
     },
     {
       "id": 3,

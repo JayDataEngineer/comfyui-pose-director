@@ -261,3 +261,51 @@ class TestNodeSchemasCoverage:
 
         if missing:
             pytest.fail(f"Missing schemas for node types: {sorted(missing)}")
+
+
+class TestDualModeWorkflow:
+    """Tests for the combined dual-mode workflow (05_sprite_dual_mode_edit.json)."""
+
+    def test_dual_mode_conversion_auto(self):
+        """Auto mode (select=1) routes BodyMeshRenderer through ImpactSwitch."""
+        ui = load_ui_workflow(WORKFLOWS_DIR / "05_sprite_dual_mode_edit.json")
+        patch_ui_workflow(ui, {"ImpactSwitch": {"select": 1}})
+        api = convert_ui_to_api(ui)
+
+        # ImpactSwitch should have select=1
+        switch = api["15"]
+        assert switch["class_type"] == "ImpactSwitch"
+        assert switch["inputs"]["select"] == 1
+
+        # VNCCS_QWEN_Encoder image1 should come from ImpactSwitch
+        encoder = api["9"]
+        assert encoder["inputs"]["image1"] == ["15", 0]
+
+        # BodyMeshRenderer should exist
+        assert "13" in api
+        assert api["13"]["class_type"] == "BodyMeshRenderer"
+
+        # VNCCS_PoseStudio should exist
+        assert "14" in api
+        assert api["14"]["class_type"] == "VNCCS_PoseStudio"
+
+    def test_dual_mode_conversion_manual(self):
+        """Manual mode (select=2) routes VNCCS_PoseStudio through ImpactSwitch."""
+        ui = load_ui_workflow(WORKFLOWS_DIR / "05_sprite_dual_mode_edit.json")
+        patch_ui_workflow(ui, {"ImpactSwitch": {"select": 2}})
+        api = convert_ui_to_api(ui)
+
+        switch = api["15"]
+        assert switch["inputs"]["select"] == 2
+
+        # OpenposePreprocessor image should come from ImpactSwitch
+        preprocessor = api["3"]
+        assert preprocessor["inputs"]["image"] == ["15", 0]
+
+    def test_dual_mode_has_both_paths(self):
+        """Workflow should contain both BodyMeshRenderer and VNCCS_PoseStudio."""
+        ui = load_ui_workflow(WORKFLOWS_DIR / "05_sprite_dual_mode_edit.json")
+        node_types = {n["type"] for n in ui["nodes"]}
+        assert "BodyMeshRenderer" in node_types
+        assert "VNCCS_PoseStudio" in node_types
+        assert "ImpactSwitch" in node_types

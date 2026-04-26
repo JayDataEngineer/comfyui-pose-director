@@ -139,12 +139,21 @@ def run_single_frame(
     rotations_json: str,
     direction: str,
     seed: int,
+    mode: str = "auto",
+    pose_data: str | None = None,
 ) -> bytes | None:
-    """Run a single sprite frame through the pipeline. Returns image bytes."""
-    model_rotation_y = DIRECTION_ROTATIONS.get(direction, 0.0)
+    """Run a single sprite frame through the pipeline. Returns image bytes.
 
-    workflow = load_ui_workflow(WORKFLOWS_DIR / "05_sprite_bodymesh_edit.json")
-    patch_ui_workflow(workflow, {
+    Args:
+        mode: "auto" uses BodyMeshRenderer (select=1), "manual" uses VNCCS_PoseStudio (select=2).
+        pose_data: JSON string for VNCCS_PoseStudio (only used in manual mode).
+    """
+    model_rotation_y = DIRECTION_ROTATIONS.get(direction, 0.0)
+    switch_select = 1 if mode == "auto" else 2
+
+    workflow = load_ui_workflow(WORKFLOWS_DIR / "05_sprite_dual_mode_edit.json")
+    patches = {
+        "ImpactSwitch": {"select": switch_select},
         "LoadImage": {"image": character_image},
         "BodyMeshRenderer": {
             "rotations_json": rotations_json,
@@ -156,7 +165,10 @@ def run_single_frame(
         },
         "KSampler": {"seed": seed},
         "SaveImage": {"filename_prefix": "PoseDirector/sprite"},
-    })
+    }
+    if mode == "manual" and pose_data is not None:
+        patches["VNCCS_PoseStudio"] = {"pose_data": pose_data}
+    patch_ui_workflow(workflow, patches)
 
     api = convert_ui_to_api(workflow)
     result = submit_workflow(api)
@@ -186,6 +198,7 @@ def run_hymotion_batch(
     seed: int | None = None,
     remove_bg: bool = False,
     animation_name: str = "hymotion",
+    mode: str = "auto",
 ):
     """Run sprite pipeline from HY-Motion NPZ output.
 
@@ -246,7 +259,8 @@ def run_hymotion_batch(
         t0 = time.time()
 
         try:
-            img_bytes = run_single_frame(character_image, rotations_json, direction, frame_seed)
+            img_bytes = run_single_frame(character_image, rotations_json, direction, frame_seed,
+                                          mode=mode)
         except Exception as e:
             log(f"  ERROR: {e}")
             continue
@@ -306,6 +320,7 @@ def run_batch(
     directions: list[str] | None = None,
     seed: int | None = None,
     remove_bg: bool = False,
+    mode: str = "auto",
 ):
     """Run batch sprite generation for multiple animations/directions."""
     if seed is None:
@@ -443,6 +458,8 @@ def main():
     parser.add_argument("--directions", nargs="+", default=["front"],
                        help="Directions: front right back left")
     parser.add_argument("--remove-bg", action="store_true", help="Remove background (transparent sprites)")
+    parser.add_argument("--mode", choices=["auto", "manual"], default="auto",
+                       help="Pipeline mode: auto=BodyMeshRenderer, manual=VNCCS_PoseStudio (default: auto)")
     parser.add_argument("--seed", type=int, default=None, help="Base random seed")
     args = parser.parse_args()
 
@@ -455,6 +472,7 @@ def main():
             seed=args.seed,
             remove_bg=args.remove_bg,
             animation_name=args.hymotion_name,
+            mode=args.mode,
         )
     else:
         run_batch(
@@ -464,6 +482,7 @@ def main():
             directions=args.directions,
             seed=args.seed,
             remove_bg=args.remove_bg,
+            mode=args.mode,
         )
 
 

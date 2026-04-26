@@ -1,79 +1,75 @@
 # Plan 4: Dual-Mode Workflows
 
-## Status: Designed
+## Status: Implemented
 
 ## Concept
 
 Every pipeline stage supports two paths: **manual** and **automatic**.
-The user chooses at runtime via CLI flag or ComfyUI workflow toggle.
-
-## Current State
-
-We already have separate workflow files for manual vs automatic paths:
-
-| Stage | Manual (Browser) | Automatic (CLI) |
-|-------|-----------------|-----------------|
-| Pose/Body | `05_sprite_pose_edit.json` (VNCCS_PoseStudio) | `05_sprite_bodymesh_edit.json` (BodyMeshRenderer) |
-| Motion | Manual pose sliders in Pose Studio | HY-Motion text-to-motion |
-| Character | `00_z_image_character.json` (manual prompt) | PromptEnhancer auto-generates prompt |
-
-The pipeline scripts already pick the right workflow:
-- `run_sprite_pipeline.py` → `05_sprite_bodymesh_edit.json` (auto)
-- `run_sprite_batch.py` → `05_sprite_bodymesh_edit.json` (auto)
-- Browser user → `05_sprite_pose_edit.json` (manual)
+The user chooses at runtime via CLI flag or by setting the ImpactSwitch `select` value.
 
 ## Implementation
 
-### Pipeline-Level Mode Switch
+### Combined Workflow: `05_sprite_dual_mode_edit.json`
 
-Rather than modifying workflows (which would require ComfyUI-specific switching nodes),
-we handle mode selection at the **pipeline runner level**:
+A single workflow file with both paths, using `ImpactSwitch` from comfyui-impact-pack:
 
-```python
-# In pipeline runner scripts:
-WORKFLOWS = {
-    "manual": {
-        "pose": "05_sprite_pose_edit.json",    # VNCCS_PoseStudio (Three.js)
-        "motion": "manual_slider_input",
-    },
-    "automatic": {
-        "pose": "05_sprite_bodymesh_edit.json", # BodyMeshRenderer (Anny)
-        "motion": "01_hymotion_keyframes.json", # HY-Motion DiT
-    },
-}
-
-mode = os.environ.get("POSE_DIRECTOR_MODE", "automatic")
-workflow_file = WORKFLOWS[mode]["pose"]
 ```
+LoadImage(1) → character photo
+
+BodyMeshRenderer(13) → IMAGE ──┐
+                                ├── ImpactSwitch(15) → OpenposePreprocessor(3) → IMAGE
+VNCCS_PoseStudio(14) → IMAGE ──┘                              │
+         select=1 = auto        select=2 = manual              │
+                                                               ↓
+                                              VNCCS_QWEN_Encoder(9).image1 ← ImpactSwitch
+                                              VNCCS_QWEN_Encoder(9).image2 ← LoadImage
+                                              VNCCS_QWEN_Encoder(9).image3 ← OpenposePreprocessor
+                                                        ↓
+                                              KSampler(10) → VAEDecode(11) → SaveImage(12)
+```
+
+**Mode switching**:
+- `select=1` → BodyMeshRenderer (automatic: Anny 3D mesh, rotations from PoseLibrary/HY-Motion)
+- `select=2` → VNCCS_PoseStudio (manual: Three.js browser-based pose editor)
+
+**Shared nodes** (4-12): UnetLoaderGGUF, CLIPLoader, VAELoader, LoRA x2, VNCCS_QWEN_Encoder, KSampler, VAEDecode, SaveImage
 
 ### CLI Integration
 
 ```bash
-# Automatic mode (default): LLM/HY-Motion generates poses
+# Automatic mode (default): BodyMeshRenderer + PoseLibrary/HY-Motion
 python scripts/run_sprite_batch.py --animations idle --directions front
 
-# Manual mode: load poses from JSON (user provides or from PoseLibrary)
-python scripts/run_sprite_batch.py --poses Hi exercises1 --directions front
+# Explicit auto mode
+python scripts/run_sprite_batch.py --animations idle --directions front --mode auto
+
+# Manual mode: VNCCS_PoseStudio (load pose from JSON)
+python scripts/run_sprite_batch.py --poses Hi exercises1 --directions front --mode manual
 
 # HY-Motion mode: trained DiT generates poses
 python scripts/run_sprite_batch.py --hymotion output/wave.npz --directions front
 ```
 
-### Future: Combined Workflow with Toggle
+### Pipeline Script Changes
 
-If `comfyui-logic` or `ComfyUI-Impact-Pack` switching nodes are installed,
-a single workflow could support both modes via a boolean widget:
+`scripts/run_sprite_batch.py`:
+- `run_single_frame()` now takes `mode` param ("auto" or "manual")
+- Loads `05_sprite_dual_mode_edit.json` instead of `05_sprite_bodymesh_edit.json`
+- Sets `ImpactSwitch.select` via `patch_ui_workflow`
+- `--mode` CLI flag (default: "auto")
 
-```
-[Mode Switch: automatic]
-    ├── [automatic] → BodyMeshRenderer → OpenposePreprocessor → VNCCS_QWEN_Encoder → KSampler
-    └── [manual]    → VNCCS_PoseStudio → VNCCS_QWEN_Encoder → KSampler
-```
+### UI-to-API Converter
 
-This requires:
-1. Installing `comfyui-logic` (`cd custom_nodes && git clone https://github.com/EllangoK/ComfyUI-Logic`)
-2. Creating a combined workflow JSON with both paths
-3. Adding a boolean widget to switch between them
+`pipeline/ui_to_api.py`:
+- Added `ImpactSwitch` to `NODE_SCHEMAS`: `["select", "sel_mode"]`
+
+### Workflow Files
+
+| File | Description |
+|------|-------------|
+| `05_sprite_dual_mode_edit.json` | **Combined** workflow with ImpactSwitch mode toggle |
+| `05_sprite_bodymesh_edit.json` | Auto-only (BodyMeshRenderer) — kept for backward compat |
+| `05_sprite_pose_edit.json` | Manual-only (VNCCS_PoseStudio) — kept for backward compat |
 
 ### Benefits of Dual-Mode
 

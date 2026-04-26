@@ -168,6 +168,7 @@ NODE_SCHEMAS: dict[str, list[str]] = {
     "HYMotionExportFBX": ["motion_data", "output_dir", "filename_prefix", "custom_fbx_path", "yaw_offset"],
     "MotionMeshRenderer": ["motion_data", "sample_index", "frame_step", "num_keyframes", "width", "height"],
     "VNCCS_PoseStudio": ["pose_data"],
+    "ImpactSwitch": ["select", "sel_mode"],
     "VNCCS_QWEN_Encoder": [
         "clip",
         "prompt",

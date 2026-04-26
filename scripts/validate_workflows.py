@@ -20,7 +20,7 @@ from pathlib import Path
 
 import requests
 
-COMFYUI_URL = os.environ.get("COMFYUI_URL", "http://127.0.0.1:8465")
+COMFYUI_URL = os.environ.get("COMFYUI_URL", "http://localhost:8000/comfyui")
 MODEL_BASE = os.environ.get(
     "MODEL_BASE",
     "/home/ubuntu/Documents/programs/shared-docker-infra/models/image-gen/comfyui",

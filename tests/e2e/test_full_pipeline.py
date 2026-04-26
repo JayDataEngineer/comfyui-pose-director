@@ -1,6 +1,6 @@
 """E2E test: Full pipeline from character generation to video output.
 
-Stages (each is a separate ComfyUI workflow with restart between stages):
+Stages (Ray manages GPU/VRAM between stages):
   A. Generate character (Z-Image Turbo) — workflows/00_z_image_character.json
   C. Generate keyframes (MotionDirector in rotation mode → Anny 3D body mesh renders)
   D. Edit ALL keyframes with VNCCS QWEN Encoder (body mesh as image2)
@@ -17,7 +17,7 @@ from PIL import Image
 
 from conftest import (
     submit_workflow, get_output_images, get_output_video, upload_image,
-    restart_comfyui, load_ui_workflow, patch_ui_workflow, patch_connection,
+    load_ui_workflow, patch_ui_workflow, patch_connection,
     convert_ui_to_api, WORKFLOWS_DIR,
 )
 
@@ -62,9 +62,6 @@ def e2e_result(comfyui, llm_config):
     upload_image(char_images[0], "e2e_character.png", "PoseDirector")
     print(f"[E2E] Step A done: character image {len(char_images[0])} bytes")
 
-    # Restart ComfyUI to clear Z-Image model from VRAM
-    restart_comfyui()
-
     # ── Step C: Generate keyframes via rotation mode (Anny body mesh) ──
     print("[E2E] Step C: Generating motion keyframes (rotation mode → Anny body mesh)...")
     kf_workflow = load_ui_workflow(WORKFLOWS_DIR / "01_motion_keyframes_rotation.json")
@@ -87,9 +84,6 @@ def e2e_result(comfyui, llm_config):
     # Upload each keyframe individually so Step D can load them by name
     for i, kf_bytes in enumerate(kf_images):
         upload_image(kf_bytes, f"e2e_kf_{i}.png", "PoseDirector")
-
-    # Restart ComfyUI to clear MotionDirector / Anny from VRAM before loading Qwen Edit
-    restart_comfyui()
 
     # ── Step D: Edit ALL keyframes with VNCCS QWEN Encoder ────────────
     edited_keyframes = []
@@ -122,9 +116,6 @@ def e2e_result(comfyui, llm_config):
         print(f"[E2E] Step D: keyframe {kf_idx} edited — {len(edited_imgs[0])} bytes")
 
     print(f"[E2E] Step D done: {len(edited_keyframes)} keyframes edited")
-
-    # Restart ComfyUI to clear Qwen Edit models from VRAM before LTX Video loads
-    restart_comfyui()
 
     # ── Step E: Assemble video with LTX Video 2.3 ─────────────────────
     print("[E2E] Step E: Assembling video with LTX Video 2.3...")

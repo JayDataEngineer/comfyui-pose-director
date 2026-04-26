@@ -14,7 +14,6 @@ Usage:
 import io
 import os
 import random
-import subprocess
 import sys
 import time
 from datetime import datetime
@@ -77,25 +76,6 @@ DIR_VIDEO = "4_video"
 
 def log(msg: str):
     print(f"[pipeline] {msg}", flush=True)
-
-
-def ensure_vram():
-    """Stop llama.cpp container if running to free 19GB VRAM for HY-Motion."""
-    try:
-        result = subprocess.run(
-            ["docker", "inspect", "-f", "{{.State.Running}}", "orchestrator-llama"],
-            capture_output=True, text=True, timeout=5,
-        )
-        if result.stdout.strip() == "true":
-            log("Stopping llama.cpp container (frees 19GB VRAM)...")
-            subprocess.run(["docker", "update", "--restart=no", "orchestrator-llama"],
-                           capture_output=True, timeout=10)
-            subprocess.run(["docker", "stop", "orchestrator-llama"],
-                           capture_output=True, timeout=30)
-            time.sleep(3)
-            log("llama.cpp stopped")
-    except Exception:
-        pass  # Docker not available or container doesn't exist
 
 
 def _setup_run_dir() -> Path:
@@ -338,9 +318,6 @@ def main():
     except Exception as e:
         log(f"ERROR: ComfyUI not reachable at {COMFYUI_URL}: {e}")
         sys.exit(1)
-
-    # Free VRAM by stopping llama.cpp
-    ensure_vram()
 
     run_dir = _setup_run_dir()
     log(f"Run directory: {run_dir}")

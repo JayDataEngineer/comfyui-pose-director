@@ -42,7 +42,7 @@ PROJECT_DIR = Path(__file__).parent.parent
 COMFYUI_DIR = Path(
     os.environ.get("COMFYUI_DIR", "/home/ubuntu/Documents/programs/img/comfyui")
 ) if (os := __import__("os")) else Path("/home/ubuntu/Documents/programs/img/comfyui")
-COMFYUI_URL = os.environ.get("COMFYUI_URL", "http://127.0.0.1:8465") if (os := __import__("os")) else "http://127.0.0.1:8465"
+COMFYUI_URL = os.environ.get("COMFYUI_URL", "http://localhost:8000/comfyui") if (os := __import__("os")) else "http://localhost:8000/comfyui"
 
 # Directories to scan for workflows (relative to ComfyUI or absolute)
 SOURCES: list[tuple[str, Path]] = [

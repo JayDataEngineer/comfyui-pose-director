@@ -214,6 +214,24 @@ uv run pytest tests/integration/ -v
 RUN_E2E=1 uv run pytest tests/e2e/ -v -s
 ```
 
+### ComfyUI App Builder
+Generates `.app.json` files from extension workflows for ComfyUI's native App Builder (Apps sidebar tab).
+```bash
+# Generate all apps (needs ComfyUI running for best results)
+uv run python scripts/build_comfyui_apps.py
+
+# Offline mode (uses heuristics only)
+uv run python scripts/build_comfyui_apps.py --offline
+
+# Single extension
+uv run python scripts/build_comfyui_apps.py --source vnccs
+
+# Preview without writing files
+uv run python scripts/build_comfyui_apps.py --dry-run
+```
+Covers: VNCCS, VNCCS-Utils, HY-Motion, Pose Director (26 apps across 7 categories).
+Output: `{comfyui_dir}/Workflows/apps/{category}/` + `docs/workflow_catalog.md`
+
 ### Environment
 - RTX 4090 (24GB VRAM), CUDA 13.1, Ubuntu, 62GB RAM
 - Python 3.12 via `uv` (system Python is 3.14, too new)

@@ -10,7 +10,7 @@ All share the same foundation: Z-Image (character) + HY-Motion (poses) + VNCCS (
 | 1 | **Sprite Pipeline** | COMPLETE | Game sprite sheets via VNCCS, AI-driven poses |
 | 2 | **TRELLIS Pipeline** | Implemented (turntable) | 3D character model, render from any angle |
 | 3 | **Autonomous Batch** | Implemented | Vision-evaluated batch NPC sprite generation |
-| 4 | **Dual-Mode Workflows** | Designed | Manual + automatic paths in every workflow |
+| 4 | **Dual-Mode Workflows** | Implemented | ImpactSwitch toggles manual/automatic paths |
 
 ## Shared Foundation
 

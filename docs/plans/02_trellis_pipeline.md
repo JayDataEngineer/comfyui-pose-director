@@ -91,10 +91,13 @@ Stage E: Video                 Stitch rendered frames → MP4
 
 ## TRELLIS Installation Status
 
-- **TRELLIS 2.0**: Installed at `~/Documents/programs/TRELLIS.2/`
+- **TRELLIS 2.0**: Installed at `~/Documents/programs/TRELLIS.2/` (or `~/Documents/programs/ray/infra/repos/TRELLIS.2/`)
 - **Model weights**: `~/Documents/models/3d/trellis/TRELLIS.2-4B/`
 - **ComfyUI extension**: NOT installed yet (`smthemex/ComfyUI_TRELLIS`)
 - **Dependencies**: needs `o_voxel`, `utils3d`, `nvdiffrast`, custom CUDA ops
+- **Ray deployment**: Already deployed at `/3d/trellis` via `services/creative/trellis.py`
+- **Ray SDK**: `client.generate_3d(image_bytes)` → GLB bytes
+- **Job API**: `POST /jobs/trellis` for async generation
 
 ## VNCCS Character Sheet Integration
 
@@ -107,8 +110,29 @@ for TRELLIS input.
 
 ## Next Steps
 
-1. Install `ComfyUI_TRELLIS` extension OR run TRELLIS standalone
-2. Build Stage B: character image → 3D GLB
+1. ~~Install `ComfyUI_TRELLIS` extension OR run TRELLIS standalone~~ — Ray deployment already handles this
+2. Build Stage B: character image → 3D GLB via Ray SDK (`client.generate_3d()`)
 3. Build Stage D: render GLB from multiple camera angles (turntable first)
 4. Replace current pipeline's Stage D+E with TRELLIS rendering
 5. (Future) Add skeletal rigging for full animation
+
+### Ray Integration Path
+
+Since TRELLIS is already deployed as a Ray Serve endpoint:
+
+```python
+from ray.sdk.client import RayClient
+
+client = RayClient()
+glb_bytes = await client.generate_3d(image_bytes)
+```
+
+Or via job API for async:
+```bash
+curl -X POST http://localhost:8000/jobs/trellis -F "image=character.png"
+```
+
+The Pose Director TRELLIS script should:
+1. Use the Ray SDK client for 3D generation
+2. Use pyrender for turntable rendering (no ComfyUI needed for this stage)
+3. Output rendered keyframes in the same format as the sprite pipeline

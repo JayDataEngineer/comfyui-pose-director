@@ -1,122 +1,92 @@
 # Plan 4: Dual-Mode Workflows
 
-## Status: Tentative
+## Status: Designed
 
 ## Concept
 
-Every workflow supports two paths: **manual** and **automatic**. The user chooses
-at runtime. Manual mode gives full control (VNCCS Pose Studio sliders, hand-tuned
-parameters). Automatic mode lets HY-Motion and the pipeline handle everything.
+Every pipeline stage supports two paths: **manual** and **automatic**.
+The user chooses at runtime via CLI flag or ComfyUI workflow toggle.
 
-## Why
+## Current State
 
-Right now our workflows are single-path. If you want to pose a character, you either:
-- Use VNCCS Pose Studio (manual, slow, precise) — good for hero characters
-- Use HY-Motion → VNCCS edit (automatic, fast, less control) — good for NPCs
+We already have separate workflow files for manual vs automatic paths:
 
-These should be the same workflow with a mode switch, not two separate workflows.
+| Stage | Manual (Browser) | Automatic (CLI) |
+|-------|-----------------|-----------------|
+| Pose/Body | `05_sprite_pose_edit.json` (VNCCS_PoseStudio) | `05_sprite_bodymesh_edit.json` (BodyMeshRenderer) |
+| Motion | Manual pose sliders in Pose Studio | HY-Motion text-to-motion |
+| Character | `00_z_image_character.json` (manual prompt) | PromptEnhancer auto-generates prompt |
+
+The pipeline scripts already pick the right workflow:
+- `run_sprite_pipeline.py` → `05_sprite_bodymesh_edit.json` (auto)
+- `run_sprite_batch.py` → `05_sprite_bodymesh_edit.json` (auto)
+- Browser user → `05_sprite_pose_edit.json` (manual)
 
 ## Implementation
 
-### ComfyUI Branching
+### Pipeline-Level Mode Switch
 
-Use `comfyui-logic` or `comfyui-impact-pack` nodes for conditional execution:
+Rather than modifying workflows (which would require ComfyUI-specific switching nodes),
+we handle mode selection at the **pipeline runner level**:
 
-```
-                    ┌─ Mode Switch ─────────────────────┐
-                    │                                    │
-              [Manual]                            [Automatic]
-                    │                                    │
-                    ▼                                    ▼
-         VNCCS_PoseStudio                    HY-Motion Generate
-         (user adjusts sliders)              (text → trained DiT)
-                    │                                    │
-                    ▼                                    ▼
-              VNCCS_PoseStudio                      Convert to VNCCS
-              mesh render                           pose_data format
-                    │                                    │
-                    └──────────┬─────────────────────────┘
-                               ▼
-                     VNCCS_QWEN_Encoder
-                     (3-image conditioning)
-                               ▼
-                         KSampler (4-step)
-                               ▼
-                          VAEDecode
-                               ▼
-                         SaveImage
-```
-
-### Mode Switch Options
-
-1. **comfyui-logic `If` node** — boolean widget toggles between paths
-2. **comfyui-impact-pack `ImageBatch`** — merge both paths, use only one
-3. **ComfyUI native `mode` property** — set node `mode: 4` (bypass) on the unused path
-4. **Workflow-level switch** — two workflow files, pipeline script picks the right one
-
-Option 4 is simplest and what we already do (separate workflow files). But having
-a single combined workflow with a toggle is better for the ComfyUI UI experience.
-
-### Where Dual-Mode Applies
-
-| Workflow | Manual Path | Automatic Path |
-|----------|------------|----------------|
-| Character (Stage A) | Manual prompt, hand-tuned params | PromptEnhancer generates prompt |
-| Pose/Motion (Stage B) | VNCCS Pose Studio sliders | HY-Motion text-to-motion |
-| Edit (Stage C) | Manual instruction tweaking | Default VNCCS instruction |
-| Video (Stage E) | Manual keyframe placement | Auto keyframe at regular intervals |
-
-### Use Cases
-
-**Manual mode** (hero characters, key animations):
-- Main character idle/walk cycle — needs to be perfect
-- Boss attack animations — signature moves
-- Cutscene poses — dramatic moments
-- When the user wants pixel-perfect control
-
-**Automatic mode** (NPCs, batch generation):
-- Guard idle/walk — generic but consistent
-- Villager animations — don't need to be unique
-- Batch generation for Plan 3 (autonomous batch)
-- Quick prototyping before manual refinement
-
-### Hybrid Approach
-
-Start in automatic mode, then switch to manual for refinement:
-1. HY-Motion generates initial poses
-2. User sees the preview in ComfyUI
-3. Adjusts specific bones in VNCCS Pose Studio
-4. Re-runs only the VNCCS edit stage
-
-This is the natural workflow: automatic draft → manual polish.
-
-## Technical Notes
-
-### comfyui-logic Installation
-- Already installed? Need to check
-- Provides: `If`, `Switch`, `Compare` nodes for conditional execution
-
-### comfyui-impact-pack
-- Already installed (used for `ImpactImageBatchToImageList`)
-- Provides additional routing/switching nodes
-
-### Workflow Design Pattern
-```json
-{
-  "nodes": [
-    {"type": "ModeSwitch", "widgets_values": ["automatic"]},
-    {"type": "VNCCS_PoseStudio", "mode": 4, "id": 100},
-    {"type": "HYMotionGenerate", "mode": 0, "id": 200},
-    ...
-  ]
+```python
+# In pipeline runner scripts:
+WORKFLOWS = {
+    "manual": {
+        "pose": "05_sprite_pose_edit.json",    # VNCCS_PoseStudio (Three.js)
+        "motion": "manual_slider_input",
+    },
+    "automatic": {
+        "pose": "05_sprite_bodymesh_edit.json", # BodyMeshRenderer (Anny)
+        "motion": "01_hymotion_keyframes.json", # HY-Motion DiT
+    },
 }
+
+mode = os.environ.get("POSE_DIRECTOR_MODE", "automatic")
+workflow_file = WORKFLOWS[mode]["pose"]
 ```
 
-Setting `mode: 4` on a node bypasses it (ComfyUI native feature). The mode switch
-would toggle mode between 0 (active) and 4 (bypass) on the appropriate path nodes.
+### CLI Integration
+
+```bash
+# Automatic mode (default): LLM/HY-Motion generates poses
+python scripts/run_sprite_batch.py --animations idle --directions front
+
+# Manual mode: load poses from JSON (user provides or from PoseLibrary)
+python scripts/run_sprite_batch.py --poses Hi exercises1 --directions front
+
+# HY-Motion mode: trained DiT generates poses
+python scripts/run_sprite_batch.py --hymotion output/wave.npz --directions front
+```
+
+### Future: Combined Workflow with Toggle
+
+If `comfyui-logic` or `ComfyUI-Impact-Pack` switching nodes are installed,
+a single workflow could support both modes via a boolean widget:
+
+```
+[Mode Switch: automatic]
+    ├── [automatic] → BodyMeshRenderer → OpenposePreprocessor → VNCCS_QWEN_Encoder → KSampler
+    └── [manual]    → VNCCS_PoseStudio → VNCCS_QWEN_Encoder → KSampler
+```
+
+This requires:
+1. Installing `comfyui-logic` (`cd custom_nodes && git clone https://github.com/EllangoK/ComfyUI-Logic`)
+2. Creating a combined workflow JSON with both paths
+3. Adding a boolean widget to switch between them
+
+### Benefits of Dual-Mode
+
+| Aspect | Manual | Automatic |
+|--------|--------|-----------|
+| Speed | Slow (hand-tune per pose) | Fast (batch, unattended) |
+| Quality | Higher for hero characters | Good enough for NPCs |
+| Control | Pixel-perfect | Limited to text description |
+| Best for | Main character, bosses | Guards, villagers, crowds |
+| Iteration | Visual feedback in browser | Vision evaluation + retry |
 
 ## Relation to Other Plans
 
-- Plan 1 (sprites): Dual-mode means manual OR automatic sprite generation
-- Plan 2 (TRELLIS): Manual camera placement OR automatic camera paths
-- Plan 3 (batch agent): Always uses automatic mode, but benefits from the same workflow structure
+- **Plan 1 (sprites)**: Both modes produce the same sprite output format
+- **Plan 2 (TRELLIS)**: Manual = TRELLIS GUI, Automatic = Ray SDK
+- **Plan 3 (batch)**: Always uses automatic mode, benefits from retry logic

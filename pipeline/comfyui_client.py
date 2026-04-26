@@ -1,4 +1,12 @@
-"""Shared ComfyUI API client functions."""
+"""Shared ComfyUI API client functions.
+
+Supports two modes:
+  1. Direct:    COMFYUI_URL=http://127.0.0.1:8465 (default)
+  2. Via Ray:   COMFYUI_URL=http://localhost:8000/comfyui
+
+When using Ray mode, all requests go through the Ray gateway proxy
+which manages ComfyUI as a subprocess. This enables cloud access.
+"""
 
 import json
 import os
@@ -8,7 +16,7 @@ from pathlib import Path
 
 import requests
 
-COMFYUI_URL = "http://127.0.0.1:8465"
+COMFYUI_URL = os.environ.get("COMFYUI_URL", "http://127.0.0.1:8465").rstrip("/")
 POLL_INTERVAL = 2
 MAX_WAIT = 900  # 15 minutes max per workflow (first run includes model loading)
 

@@ -44,7 +44,7 @@ Stage E (optional): VFX    LTX Video → cutscene MP4 for key moments
 
 | Component | VNCCS Node | What it does |
 |-----------|-----------|--------------|
-| Mesh rendering | `VNCCS_PoseStudio` | MakeHuman mesh + FK + skinning + render |
+| Mesh rendering | `BodyMeshRenderer` | Anny + pyrender (high-quality 3D, works in CLI) |
 | Character editing | `VNCCS_QWEN_Encoder` | 3-image conditioning (mesh + char + openpose) |
 | OpenPose extraction | `OpenposePreprocessor` | Skeleton overlay from mesh render |
 | Sheet splitting | `CharacterSheetCropper` | Contour-based crop from sheets |
@@ -268,10 +268,11 @@ func _process(delta):
 ## Implementation Priority
 
 ### Phase 1: VNCCS Integration (use what exists)
-1. Build VNCCS-format pose output in MotionDirector
-2. Test: MotionDirector → VNCCS_PoseStudio → VNCCS_QWEN_Encoder → sprite frames
-3. Add direction support via `modelRotation`
-4. Batch runner script for full animation sets
+1. ~~Build VNCCS-format pose output in MotionDirector~~ (done — anny_compat handles VNCCS bone names)
+2. ~~Test: BodyMeshRenderer → VNCCS_QWEN_Encoder → sprite frames~~ (done — ~30s/frame, tested 4 poses)
+3. ~~Add direction support via modelRotation~~ (done — model_rotation_y on BodyMeshRenderer, 4 directions)
+4. ~~Batch runner script for full animation sets~~ (done — run_sprite_batch.py with presets)
+5. ~~Background removal for transparent sprites~~ (done — rembg u2net, --remove-bg flag)
 
 ### Phase 2: Sprite Assembly & Godot
 1. Metadata JSON → Godot .tres converter
@@ -295,7 +296,7 @@ func _process(delta):
 | VNCCS Pose Library | Installed | 20+ preset poses |
 | VNCCS SpriteGenerator | Installed | Sprite export |
 | VNCCS SheetManager | Installed | Sheet assembly |
-| Background removal | Check needed | rembg or BiRefN |
+| Background removal | Installed | rembg u2net (--remove-bg flag) |
 | Godot 4.x | User installs | Game engine |
 
 ## Why This Architecture

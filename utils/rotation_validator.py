@@ -27,11 +27,12 @@ REQUIRED_JOINTS = [
 ]
 
 # Anatomical angle limits per joint per axis: (min_degrees, max_degrees).
-# Based on human biomechanics — joints cannot bend beyond these ranges.
-# Convention: XYZ Euler from T-pose (arms outstretched horizontally).
-#   X: forward/backward tilt
-#   Y: left/right rotation
-#   Z: inward/outward rotation
+# Based on human biomechanics and empirically verified with Anny (Z-up convention).
+# Axis effects per joint type:
+#   Shoulder: Z raises/lowers arm (Z=+90 right arm UP, Z=-90 left arm UP), X sweeps, Y rotates
+#   Elbow:    Z bends forearm (-90 right, +90 left), X tilts
+#   Knee:     X bends backward
+#   Spine:    X leans forward/back, Y rotates torso
 JOINT_LIMITS: dict[str, dict[str, tuple[float, float]]] = {
     # Spine: limited flexibility in all axes
     "spine":       {"x": (-45, 45), "y": (-45, 45), "z": (-30, 30)},
@@ -39,14 +40,14 @@ JOINT_LIMITS: dict[str, dict[str, tuple[float, float]]] = {
     "neck":        {"x": (-40, 40), "y": (-60, 60), "z": (-30, 30)},
     # Head: similar to neck but independent nod/tilt
     "head":        {"x": (-40, 40), "y": (-60, 60), "z": (-30, 30)},
-    # Shoulders: wide range for arm movement
-    "right_shoulder": {"x": (-180, 180), "y": (-180, 180), "z": (-30, 180)},
-    "left_shoulder":  {"x": (-180, 180), "y": (-180, 180), "z": (-180, 30)},
-    # Elbows: hinge joints — only bend one way
-    # Right elbow: bends via negative Z (toward body)
-    "right_elbow": {"x": (-10, 10), "y": (-10, 10), "z": (-145, 10)},
-    # Left elbow: bends via positive Z (toward body)
-    "left_elbow":  {"x": (-10, 10), "y": (-10, 10), "z": (-10, 145)},
+    # Shoulders: full range — X raises/lowers arm (-90=up, +90=down)
+    "right_shoulder": {"x": (-180, 180), "y": (-180, 180), "z": (-180, 180)},
+    "left_shoulder":  {"x": (-180, 180), "y": (-180, 180), "z": (-180, 180)},
+    # Elbows: hinge joints — Z bends forearm, X allows some tilt
+    # Right elbow: bends via negative Z (toward upper arm)
+    "right_elbow": {"x": (-90, 90), "y": (-10, 10), "z": (-145, 10)},
+    # Left elbow: bends via positive Z (toward upper arm)
+    "left_elbow":  {"x": (-90, 90), "y": (-10, 10), "z": (-10, 145)},
     # Wrists: moderate flexibility
     "right_wrist": {"x": (-70, 70), "y": (-30, 30), "z": (-30, 30)},
     "left_wrist":  {"x": (-70, 70), "y": (-30, 30), "z": (-30, 30)},

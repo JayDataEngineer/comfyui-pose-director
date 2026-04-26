@@ -13,50 +13,71 @@ from typing import Optional
 import torch
 
 # Mapping from LLM-friendly joint names to Anny bone indices.
-# Anny has 163 bones but we only manipulate the major limb/spine bones.
+# Anny has 163 bones but we only manipulate the 15 major limb/spine bones.
 # Unlisted bones default to identity (T-pose).
+#
+# Derived from Anny's template_bone_heads/tails geometry (Z-up convention):
+#   Bone 44: lower spine (pelvis -> mid-back)
+#   Bone 47: upper spine (mid-back -> neck base)
+#   Bone 102: cervical spine (neck)
+#   Bone 103: cranium (head)
+#   Bone 51: right humerus (shoulder -> elbow)
+#   Bone 52: right radius (elbow -> wrist)
+#   Bone 53: right hand (wrist -> fingers)
+#   Bone 77: left humerus (mirror of 51)
+#   Bone 78: left radius (mirror of 52)
+#   Bone 79: left hand (mirror of 53)
+#   Bone 1:  right upper leg (hip -> knee)
+#   Bone 4:  right shin (knee -> ankle)
+#   Bone 5:  right foot (ankle -> toes)
+#   Bone 21: left upper leg (mirror of 1)
+#   Bone 24: left shin (mirror of 4)
+#   Bone 25: left foot (mirror of 5)
 JOINT_NAME_TO_ANNY: dict[str, int] = {
-    "spine": 3,
-    "spine01": 3,
-    "spine02": 4,
-    "spine03": 5,
-    "spine04": 6,
-    "spine05": 7,
-    "neck": 12,
-    "neck01": 10,
-    "neck02": 11,
-    "neck03": 12,
-    "head": 15,
-    # Right arm
-    "right_shoulder": 16,
-    "right_upper_arm": 18,
-    "right_upperarm": 18,
-    "right_elbow": 20,
-    "right_forearm": 20,
-    "right_wrist": 22,
+    # Spine
+    "spine": 44,
+    "spine01": 44,
+    "spine02": 44,
+    "spine03": 47,
+    "spine04": 47,
+    "spine05": 47,
+    # Neck
+    "neck": 102,
+    "neck01": 100,
+    "neck02": 101,
+    "neck03": 102,
+    # Head
+    "head": 103,
+    # Right arm (shoulder -> elbow -> wrist)
+    "right_shoulder": 51,
+    "right_upper_arm": 51,
+    "right_upperarm": 51,
+    "right_elbow": 52,
+    "right_forearm": 52,
+    "right_wrist": 53,
     # Left arm
-    "left_shoulder": 17,
-    "left_upper_arm": 19,
-    "left_upperarm": 19,
-    "left_elbow": 21,
-    "left_forearm": 21,
-    "left_wrist": 23,
-    # Right leg
+    "left_shoulder": 77,
+    "left_upper_arm": 77,
+    "left_upperarm": 77,
+    "left_elbow": 78,
+    "left_forearm": 78,
+    "left_wrist": 79,
+    # Right leg (hip -> knee -> ankle)
     "right_hip": 1,
-    "right_thigh": 25,
-    "right_upper_leg": 25,
-    "right_upperleg": 25,
-    "right_knee": 28,
-    "right_shin": 28,
-    "right_ankle": 31,
+    "right_thigh": 1,
+    "right_upper_leg": 1,
+    "right_upperleg": 1,
+    "right_knee": 4,
+    "right_shin": 4,
+    "right_ankle": 5,
     # Left leg
-    "left_hip": 2,
-    "left_thigh": 26,
-    "left_upper_leg": 26,
-    "left_upperleg": 26,
-    "left_knee": 29,
-    "left_shin": 29,
-    "left_ankle": 32,
+    "left_hip": 21,
+    "left_thigh": 21,
+    "left_upper_leg": 21,
+    "left_upperleg": 21,
+    "left_knee": 24,
+    "left_shin": 24,
+    "left_ankle": 25,
 }
 
 # Default phenotype for a generic body

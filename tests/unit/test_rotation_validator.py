@@ -139,6 +139,24 @@ class TestSanitizeRotations:
         for joint in REQUIRED_JOINTS:
             assert joint in JOINT_LIMITS, f"Missing limits for {joint}"
 
+    def test_shoulder_z_axis_arm_up_passes(self):
+        """Right shoulder Z=+90 (arm up) should pass sanitization unchanged."""
+        kfs = [_make_valid_keyframe(0, {"right_shoulder": [0, 0, 90]})]
+        result = sanitize_rotations(kfs)
+        assert result[0]["rotations"]["right_shoulder"] == [0, 0, 90]
+
+    def test_shoulder_z_axis_arm_up_left_passes(self):
+        """Left shoulder Z=-90 (arm up) should pass sanitization unchanged."""
+        kfs = [_make_valid_keyframe(0, {"left_shoulder": [0, 0, -90]})]
+        result = sanitize_rotations(kfs)
+        assert result[0]["rotations"]["left_shoulder"] == [0, 0, -90]
+
+    def test_elbow_x_axis_tilt_passes(self):
+        """Elbow X-axis tilt (up to 90°) should pass with expanded limits."""
+        kfs = [_make_valid_keyframe(0, {"right_elbow": [-60, 0, -90]})]
+        result = sanitize_rotations(kfs)
+        assert result[0]["rotations"]["right_elbow"] == [-60, 0, -90]
+
 
 class TestValidateRotationConsistency:
     def test_single_keyframe_consistent(self):

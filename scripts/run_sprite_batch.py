@@ -164,6 +164,16 @@ def run_single_frame(
     return images[0] if images else None
 
 
+def remove_background(img_bytes: bytes) -> bytes:
+    """Remove background from image using rembg. Returns RGBA PNG bytes."""
+    from rembg import remove
+    img = Image.open(io.BytesIO(img_bytes))
+    result = remove(img)
+    buf = io.BytesIO()
+    result.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def run_batch(
     character_image: str = "PoseDirector/character.png",
     character_bytes: bytes | None = None,
@@ -171,6 +181,7 @@ def run_batch(
     poses: list[str] | None = None,
     directions: list[str] | None = None,
     seed: int | None = None,
+    remove_bg: bool = False,
 ):
     """Run batch sprite generation for multiple animations/directions."""
     if seed is None:
@@ -249,6 +260,13 @@ def run_batch(
         elapsed = time.time() - t0
 
         if img_bytes:
+            # Background removal (optional)
+            if remove_bg:
+                try:
+                    img_bytes = remove_background(img_bytes)
+                except Exception as e:
+                    log(f"  BG removal failed ({e}), saving with background")
+
             # Save to animation directory
             anim_dir = run_dir / anim_name
             anim_dir.mkdir(exist_ok=True)
@@ -256,13 +274,14 @@ def run_batch(
             out_path.write_bytes(img_bytes)
 
             img = Image.open(io.BytesIO(img_bytes))
-            log(f"  OK: {img.size[0]}x{img.size[1]}, {elapsed:.1f}s")
+            log(f"  OK: {img.size[0]}x{img.size[1]} {img.mode}, {elapsed:.1f}s")
             results.append({
                 "animation": anim_name,
                 "pose": pose_name,
                 "direction": direction,
                 "path": str(out_path),
                 "size": list(img.size),
+                "transparent": remove_bg,
             })
         else:
             log(f"  ERROR: No output image")
@@ -296,6 +315,7 @@ def main():
     parser.add_argument("--poses", nargs="+", default=None, help="Custom pose names from PoseLibrary")
     parser.add_argument("--directions", nargs="+", default=["front"],
                        help="Directions: front right back left")
+    parser.add_argument("--remove-bg", action="store_true", help="Remove background (transparent sprites)")
     parser.add_argument("--seed", type=int, default=None, help="Base random seed")
     args = parser.parse_args()
 
@@ -305,6 +325,7 @@ def main():
         poses=args.poses,
         directions=args.directions,
         seed=args.seed,
+        remove_bg=args.remove_bg,
     )
 
 

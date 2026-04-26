@@ -280,9 +280,9 @@ func _process(delta):
 3. ~~Direction-aware billboard system~~ (done — mirror support, direction switching)
 
 ### Phase 3: Cutscene System
-1. Select animations for LTX cutscene upgrade
-2. Godot VideoStreamPlayer integration
-3. Sprite → cutscene → sprite transitions
+1. ~~Select animations for LTX cutscene upgrade~~ (done — run_cutscene.py with batch dir or frame selection)
+2. ~~Godot VideoStreamPlayer integration~~ (done — export_cutscene_godot with .tscn + GDScript + fade transitions)
+3. ~~Sprite → cutscene → sprite transitions~~ (done — cutscene_meta.json with duration, GDScript signals for game code)
 
 ## Required Models/Tools
 

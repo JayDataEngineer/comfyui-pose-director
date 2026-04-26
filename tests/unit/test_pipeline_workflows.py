@@ -24,14 +24,16 @@ class TestLoadWorkflow:
         assert "CLIPLoader" in node_types
         assert "KSampler" in node_types
 
-    def test_load_motion_director_workflow(self):
-        wf = load_ui_workflow(WORKFLOWS_DIR / "01_motion_keyframes_rotation.json")
+    def test_load_hymotion_workflow(self):
+        wf = load_ui_workflow(WORKFLOWS_DIR / "01_hymotion_keyframes.json")
         node_types = {n["type"] for n in wf["nodes"]}
-        assert "MotionDirector" in node_types
+        assert "HYMotionLoadLLM" in node_types
+        assert "HYMotionLoadNetwork" in node_types
+        assert "HYMotionEncodeText" in node_types
+        assert "HYMotionGenerate" in node_types
+        assert "MotionMeshRenderer" in node_types
         assert "PreviewImage" in node_types
-        # No legacy nodes
-        assert "OpenposePreprocessor" not in node_types
-        assert "LoadImage" not in node_types
+        assert "HYMotionSaveNPZ" in node_types
 
     def test_load_vnccs_workflow(self):
         wf = load_ui_workflow(WORKFLOWS_DIR / "02_vnccs_edit_keyframe.json")
@@ -77,20 +79,18 @@ class TestPatchWorkflow:
         assert loadimages[0]["inputs"]["image"] == "kf0.png"
         assert loadimages[1]["inputs"]["image"] == "kf1.png"
 
-    def test_patch_motion_director_params(self):
-        wf = load_ui_workflow(WORKFLOWS_DIR / "01_motion_keyframes_rotation.json")
+    def test_patch_hymotion_params(self):
+        wf = load_ui_workflow(WORKFLOWS_DIR / "01_hymotion_keyframes.json")
         patch_ui_workflow(wf, {
-            "MotionDirector": {
-                "motion_description": "dance",
-                "num_keyframes": 3,
-                "total_frames": 24,
-            },
+            "HYMotionEncodeText": {"text": "dance"},
+            "HYMotionGenerate": {"duration": 5.0, "seed": 99},
         })
         api = convert_ui_to_api(wf)
-        md = [n for n in api.values() if n["class_type"] == "MotionDirector"][0]
-        assert md["inputs"]["motion_description"] == "dance"
-        assert md["inputs"]["num_keyframes"] == 3
-        assert md["inputs"]["total_frames"] == 24
+        enc = [n for n in api.values() if n["class_type"] == "HYMotionEncodeText"][0]
+        assert enc["inputs"]["text"] == "dance"
+        gen = [n for n in api.values() if n["class_type"] == "HYMotionGenerate"][0]
+        assert gen["inputs"]["duration"] == 5.0
+        assert gen["inputs"]["seed"] == 99
 
 
 class TestConvertWorkflow:

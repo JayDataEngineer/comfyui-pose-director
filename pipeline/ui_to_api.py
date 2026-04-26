@@ -136,6 +136,7 @@ NODE_SCHEMAS: dict[str, list[str]] = {
         "width",
         "height",
         "max_retries",
+        "vision_feedback_rounds",
     ],
     "PoseRenderer": ["keypoints", "width", "height", "line_width", "point_radius"],
     "PoseExtractor": ["pose_keypoint", "person_index"],
@@ -155,6 +156,16 @@ NODE_SCHEMAS: dict[str, list[str]] = {
         "video_format",
         "backend",
     ],
+    # HY-Motion (Tencent Hunyuan text-to-motion)
+    "HYMotionLoadLLM": ["model_name", "quantization", "offload_to_cpu"],
+    "HYMotionLoadLLMGGUF": ["gguf_file"],
+    "HYMotionLoadNetwork": ["model_name"],
+    "HYMotionEncodeText": ["llm", "text"],
+    "HYMotionGenerate": ["network", "conditioning", "duration", "seed", "cfg_scale", "num_samples"],
+    "HYMotionPreview": ["motion_data", "sample_index", "frame_step", "image_size"],
+    "HYMotionSaveNPZ": ["motion_data", "output_dir", "filename_prefix"],
+    "HYMotionExportFBX": ["motion_data", "output_dir", "filename_prefix", "custom_fbx_path", "yaw_offset"],
+    "MotionMeshRenderer": ["motion_data", "sample_index", "frame_step", "num_keyframes", "width", "height"],
     "VNCCS_QWEN_Encoder": [
         "clip",
         "prompt",
@@ -182,6 +193,7 @@ NODE_SCHEMAS: dict[str, list[str]] = {
 # Format: node_type -> {widget_index: ignored_name}
 UI_ONLY_WIDGETS: dict[str, dict[int, str]] = {
     "KSampler": {1: "control_after_generate"},
+    "HYMotionGenerate": {2: "control_after_generate"},
 }
 
 # Default values for required inputs that ComfyUI's UI may omit from widgets_values.

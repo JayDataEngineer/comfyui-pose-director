@@ -144,10 +144,10 @@ def llm_config(gemini_api_key):
     """
     or_key = os.environ.get("OPENROUTER_API_KEY", "")
     if or_key:
-        print("Using OpenRouter (deepseek-v4-flash)")
+        print("Using OpenRouter (deepseek-v4-pro)")
         return (
             "https://openrouter.ai/api/v1",
-            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-v4-pro",
             or_key,
         )
 

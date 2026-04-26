@@ -7,6 +7,7 @@ try:
     from .nodes.body_mesh_renderer import BodyMeshRendererNode
     from .nodes.prompt_enhancer import PromptEnhancerNode
     from .nodes.animation_exporter import AnimationExporterNode
+    from .nodes.motion_mesh_renderer import MotionMeshRenderer
 
     NODE_CLASS_MAPPINGS = {
         "PoseManipulator": PoseManipulatorNode,
@@ -17,6 +18,7 @@ try:
         "BodyMeshRenderer": BodyMeshRendererNode,
         "PromptEnhancer": PromptEnhancerNode,
         "AnimationExporter": AnimationExporterNode,
+        "MotionMeshRenderer": MotionMeshRenderer,
     }
 
     NODE_DISPLAY_NAME_MAPPINGS = {
@@ -28,6 +30,7 @@ try:
         "BodyMeshRenderer": "Body Mesh Renderer (Anny)",
         "PromptEnhancer": "Prompt Enhancer (Z-Image)",
         "AnimationExporter": "Animation Exporter (BVH/Video)",
+        "MotionMeshRenderer": "Motion Mesh Renderer (HY-Motion)",
     }
 except ImportError:
     # Not running inside ComfyUI's custom_nodes package context

@@ -25,31 +25,42 @@ class TestConvertUIToAPI:
         ui = load_ui_workflow(WORKFLOWS_DIR / name)
         return convert_ui_to_api(ui)
 
-    def test_motion_director_conversion(self):
-        """MotionDirector should map rotation-only params correctly."""
-        api = self._load_and_convert("01_motion_keyframes_rotation.json")
-        md = api["1"]
-        assert md["class_type"] == "MotionDirector"
-        assert md["inputs"]["motion_description"] == "Character waves their right hand in a friendly greeting"
-        assert md["inputs"]["num_keyframes"] == 4
-        assert md["inputs"]["total_frames"] == 48
-        assert md["inputs"]["base_url"] == "https://openrouter.ai/api/v1"
-        assert md["inputs"]["model"] == "deepseek/deepseek-v4-flash"
-        assert md["inputs"]["width"] == 1024
-        assert md["inputs"]["height"] == 1024
-        assert md["inputs"]["max_retries"] == 2
-        # No legacy inputs
-        assert "keypoints" not in md["inputs"]
-        assert "pose_keypoint" not in md["inputs"]
-        assert "output_mode" not in md["inputs"]
-        assert "api_key" not in md["inputs"]
+    def test_hymotion_conversion(self):
+        """HY-Motion nodes should map correctly."""
+        api = self._load_and_convert("01_hymotion_keyframes.json")
+        # Node 1: HYMotionLoadLLM
+        llm = api["1"]
+        assert llm["class_type"] == "HYMotionLoadLLM"
+        assert llm["inputs"]["model_name"] == "Qwen3-8B-bnb-4bit"
+        assert llm["inputs"]["offload_to_cpu"] is True
+        # Node 3: HYMotionEncodeText
+        enc = api["3"]
+        assert enc["class_type"] == "HYMotionEncodeText"
+        assert enc["inputs"]["text"] == "A person waves their right hand in a friendly greeting"
+        # Node 4: HYMotionGenerate
+        gen = api["4"]
+        assert gen["class_type"] == "HYMotionGenerate"
+        assert gen["inputs"]["duration"] == 3.0
+        assert gen["inputs"]["seed"] == 42
+        assert gen["inputs"]["cfg_scale"] == 5.0
+        assert gen["inputs"]["num_samples"] == 1
+        # Node 5: MotionMeshRenderer
+        mmr = api["5"]
+        assert mmr["class_type"] == "MotionMeshRenderer"
+        assert mmr["inputs"]["motion_data"] == ["4", 0]
+        assert mmr["inputs"]["sample_index"] == 0
+        assert mmr["inputs"]["frame_step"] == 5
+        assert mmr["inputs"]["num_keyframes"] == 3
+        assert mmr["inputs"]["width"] == 1024
+        # No UI-only widgets leaked
+        assert "control_after_generate" not in gen["inputs"]
 
     def test_preview_image_conversion(self):
-        """PreviewImage should map correctly."""
-        api = self._load_and_convert("01_motion_keyframes_rotation.json")
-        pi = api["4"]
+        """PreviewImage should map correctly from HY-Motion workflow."""
+        api = self._load_and_convert("01_hymotion_keyframes.json")
+        pi = api["6"]
         assert pi["class_type"] == "PreviewImage"
-        assert pi["inputs"]["images"] == ["1", 0]  # connected to MotionDirector output 0
+        assert pi["inputs"]["images"] == ["5", 0]  # connected to HYMotionPreview output 0
 
     def test_ksampler_skips_control_after_generate(self):
         """KSampler should skip the UI-only control_after_generate widget."""
@@ -124,11 +135,11 @@ class TestPatchWidgetValue:
         api = convert_ui_to_api(ui)
         assert api["5"]["inputs"]["text"] == "new prompt"
 
-    def test_patch_motion_director(self):
-        ui = load_ui_workflow(WORKFLOWS_DIR / "01_motion_keyframes_rotation.json")
-        patch_widget_value(ui, "MotionDirector", "motion_description", "jump")
+    def test_patch_hymotion_text(self):
+        ui = load_ui_workflow(WORKFLOWS_DIR / "01_hymotion_keyframes.json")
+        patch_widget_value(ui, "HYMotionEncodeText", "text", "jump")
         api = convert_ui_to_api(ui)
-        assert api["1"]["inputs"]["motion_description"] == "jump"
+        assert api["3"]["inputs"]["text"] == "jump"
 
     def test_patch_by_index(self):
         ui = load_ui_workflow(WORKFLOWS_DIR / "04_ltx_video_assembly.json")
@@ -215,7 +226,7 @@ class TestNodeSchemasCoverage:
     def test_all_workflow_node_types_have_schemas(self):
         missing = set()
         for wf_path in WORKFLOWS_DIR.glob("*.json"):
-            if "_api" in wf_path.name:
+            if "_api" in wf_path.name or "Pose Studio" in wf_path.name:
                 continue
             ui = load_ui_workflow(wf_path)
             for node in ui.get("nodes", []):

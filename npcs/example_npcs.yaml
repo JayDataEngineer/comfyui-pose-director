@@ -1,0 +1,25 @@
+# NPC definitions for autonomous batch sprite generation.
+#
+# Usage:
+#   python scripts/run_autonomous_batch.py --npcs npcs/example_npcs.yaml
+#   python scripts/run_autonomous_batch.py --npcs npcs/example_npcs.yaml --skip-character
+#   python scripts/run_autonomous_batch.py --npcs npcs/example_npcs.yaml --directions front right back left
+
+npcs:
+  - name: dark_mage
+    description: "hooded figure in dark purple robes, glowing green eyes, pale skin, holding a staff, gothic anime style"
+    animations: [idle, walk, attack, hurt, death]
+    directions: [front]
+    max_retries: 3
+
+  - name: guard
+    description: "armored knight, broad shoulders, full plate armor, helmet with visor, stern expression, anime style"
+    animations: [idle, walk, attack, hurt, death]
+    directions: [front]
+    max_retries: 3
+
+  - name: villager_woman
+    description: "peasant woman, simple brown dress, brown hair in a bun, friendly face, anime style"
+    animations: [idle, walk]
+    directions: [front]
+    max_retries: 3

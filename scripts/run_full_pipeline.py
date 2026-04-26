@@ -57,9 +57,10 @@ WORKFLOWS_DIR = PROJECT_ROOT / "workflows"
 # Default prompts/instructions
 VNCCS_PROMPT = "Draw character from image2"
 VNCCS_INSTRUCTION_MESH = (
-    "Modify the character's pose to match the body shape and pose shown in Picture 2. "
-    "Picture 2 shows a 3D body mesh rendering — match the posture, limb positions, and overall body orientation. "
-    "Maintain the character's exact appearance, clothing, and identity."
+    "Match the body pose shown in Picture 1 (3D body mesh). "
+    "Picture 2 is the character to draw. Picture 3 shows the skeleton overlay. "
+    "Replicate the exact pose, limb positions, and body orientation from Picture 1 "
+    "while maintaining the character's identity, clothing, and appearance."
 )
 DEFAULT_MOTION_DESCRIPTION = "A person waves their right hand in a friendly greeting"
 DEFAULT_LTX_PROMPT = (
@@ -254,7 +255,7 @@ def stage_edit(character_png: bytes, keyframe_images: list, run_dir: Path) -> li
                 {"image": "PoseDirector/character.png"},
                 {"image": f"PoseDirector/keyframe_{i}.png"},
             ],
-            "KSampler": {"seed": 42 + i, "steps": 40},
+            "KSampler": {"seed": 42 + i},
             "VNCCS_QWEN_Encoder": {
                 "prompt": VNCCS_PROMPT,
                 "instruction": VNCCS_INSTRUCTION_MESH,

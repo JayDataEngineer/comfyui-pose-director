@@ -40,6 +40,9 @@ class TestLoadWorkflow:
         node_types = {n["type"] for n in wf["nodes"]}
         assert "VNCCS_QWEN_Encoder" in node_types
         assert "KSampler" in node_types
+        assert "LoraLoaderModelOnly" in node_types
+        assert "OpenposePreprocessor" in node_types
+        assert "UnetLoaderGGUF" in node_types
 
     def test_load_ltx_video_workflow(self):
         wf = load_ui_workflow(WORKFLOWS_DIR / "04_ltx_video_assembly.json")
@@ -120,5 +123,18 @@ class TestConvertWorkflow:
         assert vnccs["inputs"]["prompt"] == "Draw character from image2"
         assert vnccs["inputs"]["target_size"] == 1024
         assert vnccs["inputs"]["qwen_2511"] is True
-        assert vnccs["inputs"]["image1"] == ["1", 0]
-        assert vnccs["inputs"]["image2"] == ["2", 0]
+        # image1 = mesh keyframe (node 2), image2 = character (node 1)
+        assert vnccs["inputs"]["image1"] == ["2", 0]
+        assert vnccs["inputs"]["image2"] == ["1", 0]
+        assert vnccs["inputs"]["image3"] == ["3", 0]  # OpenposePreprocessor
+        # Verify LoRA stacking
+        loras = [n for n in api.values() if n["class_type"] == "LoraLoaderModelOnly"]
+        assert len(loras) == 2
+        assert "Lightning" in loras[0]["inputs"]["lora_name"]
+        assert "PoseStudio" in loras[1]["inputs"]["lora_name"]
+        # Verify 4-step Lightning settings
+        ks = [n for n in api.values() if n["class_type"] == "KSampler"][0]
+        assert ks["inputs"]["steps"] == 4
+        assert ks["inputs"]["cfg"] == 1.0
+        assert ks["inputs"]["sampler_name"] == "euler"
+        assert ks["inputs"]["scheduler"] == "simple"

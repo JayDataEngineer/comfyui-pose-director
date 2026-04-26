@@ -57,6 +57,7 @@ NODE_SCHEMAS: dict[str, list[str]] = {
     "ConditioningZeroOut": ["conditioning"],
     "CheckpointLoaderSimple": ["ckpt_name"],
     "UnetLoaderGGUF": ["unet_name"],
+    "LoraLoaderModelOnly": ["model", "lora_name", "strength_model"],
     "DualCLIPLoaderGGUF": ["clip_name1", "clip_name2", "type"],
     "EmptyLTXVLatentVideo": ["width", "height", "length", "batch_size"],
     "LTXVAddGuideAdvanced": [

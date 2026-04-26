@@ -103,6 +103,31 @@ class TestConvertUIToAPI:
         assert vnccs["inputs"]["vl_size"] == 384
         assert vnccs["inputs"]["qwen_2511"] is True
 
+    def test_vnccs_edit_keyframe_workflow(self):
+        """02_vnccs_edit_keyframe should have LoRA stacking and 3-image conditioning."""
+        api = self._load_and_convert("02_vnccs_edit_keyframe.json")
+        # LoRA nodes: Lightning + PoseStudio
+        loras = sorted(
+            [n for n in api.values() if n["class_type"] == "LoraLoaderModelOnly"],
+            key=lambda n: n["inputs"]["lora_name"],
+        )
+        assert len(loras) == 2
+        assert "Lightning" in loras[0]["inputs"]["lora_name"]
+        assert "PoseStudio" in loras[1]["inputs"]["lora_name"]
+        # LoRA chain: node 7 -> node 8
+        assert loras[1]["inputs"]["model"] == ["7", 0]
+
+        # VNCCS encoder with 3 images
+        vnccs = [n for n in api.values() if n["class_type"] == "VNCCS_QWEN_Encoder"][0]
+        assert vnccs["inputs"]["image1"] == ["2", 0]  # mesh keyframe
+        assert vnccs["inputs"]["image2"] == ["1", 0]  # character
+        assert vnccs["inputs"]["image3"] == ["3", 0]  # openpose
+
+        # KSampler: 4-step Lightning
+        ks = [n for n in api.values() if n["class_type"] == "KSampler"][0]
+        assert ks["inputs"]["steps"] == 4
+        assert ks["inputs"]["cfg"] == 1.0
+
     def test_clip_loader_device_omitted_when_default(self):
         """CLIPLoader should omit device when no widget value is provided."""
         api = self._load_and_convert("00_z_image_character.json")

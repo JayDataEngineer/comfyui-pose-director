@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "NODE_OPTIONS='--localstorage-file=/tmp/next-ls.json' next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -13,9 +13,7 @@
     "@mdx-js/react": "^3.1.0",
     "@next/mdx": "^16.2.1",
     "clsx": "^2.1.1",
-    "framer-motion": "^12.4.10",
     "fuse.js": "^7.1.0",
-    "lucide-react": "^0.477.0",
     "next": "^15.3.3",
     "react": "19.2.0",
     "react-dom": "19.2.0",

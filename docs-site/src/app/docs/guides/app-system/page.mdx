@@ -1,0 +1,220 @@
+# ComfyUI App System — How It Works
+
+A deep dive into how we turn 60+ workflow JSONs into clean, one-click webapps.
+
+---
+
+## The Problem
+
+ComfyUI is a node-based interface — powerful, but intimidating. A typical pipeline has 20-40 nodes wired together with spaghetti connections. For someone who just wants to "generate a character" or "change the pose," seeing the full graph is overwhelming.
+
+**ComfyUI Apps** solve this by hiding the graph and exposing only the controls that matter: a text prompt here, a seed slider there, and the output image at the end.
+
+## What are ComfyUI Apps?
+
+ComfyUI has a built-in feature called the **App Builder** (also known as "linear mode"). When you open a workflow that has `extra.linearMode = true`, the frontend switches from the full node editor to a simplified form:
+
+- **Left panel**: Exposed inputs — text fields, number sliders, image uploaders
+- **Right panel**: Outputs — generated images, videos, 3D models
+- **No node graph visible**
+
+Apps appear automatically in ComfyUI's **Apps sidebar tab** when `.app.json` files exist in the Workflows directory.
+
+```
+Regular workflow → full node editor (20+ nodes, wires everywhere)
+App workflow     → clean form (3 inputs, 1 output, one click to run)
+```
+
+## The .app.json Format
+
+A `.app.json` is just a regular ComfyUI workflow JSON with one extra field:
+
+```json
+{
+  "nodes": [
+    {"id": 3, "type": "KSampler", "widgets_values": [42, 20, 7.0, ...]},
+    {"id": 5, "type": "CLIPTextEncode", "widgets_values": ["a warrior"]},
+    {"id": 9, "type": "SaveImage", "widgets_values": ["output"]}
+  ],
+  "links": [...],
+  "extra": {
+    "linearMode": true,
+    "linearData": {
+      "inputs": [
+        ["5", "text"],
+        ["3", "seed"],
+        ["3", "steps"]
+      ],
+      "outputs": ["9"]
+    }
+  }
+}
+```
+
+The magic is in `extra.linearData`:
+- **`inputs`**: Array of `[node_id, widget_name]` pairs — which controls to show
+- **`outputs`**: Array of node IDs — which results to display
+- ComfyUI's frontend reads this metadata and builds the simplified UI automatically
+
+## How We Automate It
+
+Manually authoring `.app.json` files for 60+ workflows would be painful. Instead, we built `scripts/build_comfyui_apps.py` — a script that **analyzes workflow JSONs and auto-generates the app metadata**.
+
+### The Pipeline
+
+```
+1. DISCOVER     Scan custom_nodes/ directories for workflow JSONs
+     ↓
+2. LOAD         Parse each JSON, validate it's a UI-format workflow
+     ↓
+3. CLASSIFY     Determine category (character gen, pose, video, etc.)
+     ↓
+4. ANALYZE      Walk all nodes, find inputs and outputs
+     ↓
+5. GENERATE     Inject extra.linearData, write .app.json files
+     ↓
+6. CATALOG      Write a Markdown summary of all apps
+```
+
+### Step 1: Discovery
+
+The script scans these directories for `.json` files:
+
+| Source | Directory |
+|--------|-----------|
+| Pose Director | `comfyui-pose-director/workflows/` |
+| VNCCS | `custom_nodes/vnccs/workflows/` |
+| VNCCS-Utils | `custom_nodes/vnccs-utils/workflows/` |
+| HY-Motion | `custom_nodes/ComfyUI-HY-Motion1/workflows/` |
+
+It skips `old_workflows/`, `legacy/`, `tests/`, and API-format JSONs (which have numeric keys at the top level instead of a `nodes` array).
+
+### Step 2: Classification
+
+Each workflow gets a category based on path patterns:
+
+| Pattern | Category |
+|---------|----------|
+| `*Step1*`, `00_*` | Character Generation |
+| `*Step2*`, `*Step3*`, `02_*` | Character Editing |
+| `*Step4*`, `04_*` | Video / Animation |
+| `*Pose*`, `*Motion*`, `01_*` | Pose & Motion |
+| `*PostProcess*`, `06_*` | Post-Processing |
+
+### Step 3: Node Analysis
+
+The script walks every node in the workflow and classifies it:
+
+**Output nodes** (their IDs become app outputs):
+- `SaveImage`, `PreviewImage`, `VHS_VideoCombine`, `HYMotionExportFBX`
+
+**Exposed inputs** (per `EXPOSE_RULES` dict):
+- `CLIPTextEncode` → expose `text`
+- `KSampler` → expose `seed`, `steps`, `cfg`, `denoise`
+- `MotionDirector` → expose `motion_description`, `num_keyframes`
+- `VNCCS_QWEN_Encoder` → expose `instruction`, `weight1`, `weight2`
+- etc.
+
+**Skipped nodes** (internal config, never exposed):
+- Model loaders (`UNETLoader`, `CLIPLoader`, `VAELoader`)
+- Conditioning helpers (`ConditioningZeroOut`, `ModelSamplingAuraFlow`)
+- Preprocessors (`OpenposePreprocessor`)
+
+### Step 4: Widget Name Resolution
+
+This is the trickiest part. ComfyUI workflow JSONs store widget values as positional arrays (`widgets_values`), but the App Builder needs **names**. The script resolves names using a three-tier fallback:
+
+1. **`NODE_SCHEMAS` dict** — our hand-curated schema mapping node types to ordered widget names (reused from `pipeline/ui_to_api.py`)
+2. **ComfyUI `/object_info` API** — when ComfyUI is running, query the authoritative widget names
+3. **Heuristic fallback** — inspect the node's `inputs` array; inputs with `link=None` are widgets
+
+There's also handling for **UI-only widgets** — ComfyUI injects `control_after_generate` dropdowns into `widgets_values` that aren't real inputs. The script accounts for these positional offsets.
+
+### Step 5: Generation
+
+For each valid workflow (has at least 1 output node):
+
+1. Deep-copy the workflow JSON
+2. Inject `extra.linearMode = true` and `extra.linearData`
+3. Write to `{comfyui_dir}/Workflows/apps/{category}/{name}.app.json`
+
+### Running the Script
+
+```bash
+# Generate all apps (needs ComfyUI running for best results)
+uv run python scripts/build_comfyui_apps.py
+
+# Offline mode (heuristic widget names only)
+uv run python scripts/build_comfyui_apps.py --offline
+
+# One extension only
+uv run python scripts/build_comfyui_apps.py --source vnccs
+
+# Preview without writing files
+uv run python scripts/build_comfyui_apps.py --dry-run
+
+# Verbose output
+uv run python scripts/build_comfyui_apps.py -v
+```
+
+## Output Structure
+
+```
+comfyui/Workflows/apps/
+├── character_generation/
+│   ├── 00_z_image_character.app.json
+│   ├── charsheetgenerator.app.json
+│   └── clone_existing_character.app.json
+├── character_editing/
+│   ├── 02_vnccs_edit_keyframe.app.json
+│   ├── emotionstudio_v1.app.json
+│   └── visual_camera_control.app.json
+├── pose_motion/
+│   ├── 01_hymotion_keyframes.app.json
+│   └── pose_studio.app.json
+├── video/
+│   └── 04_ltx_video_assembly.app.json
+└── post_processing/
+    └── 06_ltx_edit_anything_postprocess.app.json
+```
+
+Each `.app.json` is a self-contained workflow — copy it to another ComfyUI instance and the app works there too.
+
+## Why This is Novel
+
+Most ComfyUI users share workflows as raw `.json` files, requiring the recipient to understand the full node graph. The App Builder approach is underused because:
+
+1. **The metadata is hand-authored** — most people don't know about `linearData`
+2. **Widget name resolution is hard** — `widgets_values` is positional, not named
+3. **No one automates it** — we're the first to scan all installed extensions and batch-generate apps
+
+Our script handles all three problems. The result: 20+ one-click apps that cover the entire pipeline, from character generation to video export, with zero manual configuration.
+
+## Adding New Workflows
+
+1. Place the workflow JSON in the appropriate `workflows/` directory
+2. If it uses new node types, add them to:
+   - `EXPOSE_RULES` — which widgets to expose as app inputs
+   - `NODE_SCHEMAS` — ordered widget names for positional mapping
+   - `SKIP_NODE_TYPES` — internal nodes to hide (if not caught by default)
+3. Re-run: `uv run python scripts/build_comfyui_apps.py`
+4. Refresh ComfyUI — the new app appears in the Apps sidebar
+
+## Extending the System
+
+The `EXPOSE_RULES` and `NODE_SCHEMAS` dicts in `build_comfyui_apps.py` are the central configuration. To support a new extension:
+
+```python
+# Add to SOURCES
+("trellis", COMFYUI_DIR / "custom_nodes" / "ComfyUI-IF_Trellis" / "workflows"),
+
+# Add to EXPOSE_RULES
+"IF_TrellisImageTo3D": ["seed", "ss_guidance_strength", "texture_size"],
+
+# Add to NODE_SCHEMAS
+"IF_TrellisImageTo3D": ["model", "mode", "images", "seed", "ss_guidance_strength", ...],
+
+# Add to OUTPUT_NODE_TYPES if it has custom output nodes
+```
+
+Then re-run the script. The new extension's workflows get auto-converted to apps.

@@ -2,13 +2,15 @@
 
 **Workflows**: `VN_Step1_QWEN_CharSheetGenerator_v1.json`, `VN_Step1_CharSheetGenerator_v5.json`
 **Extension**: VNCCS
-**Category**: Character Generation
+**Category**: Character Generation (standalone utility)
 
 ---
 
+> **Not part of the main pose pipeline.** The character sheet generator is a standalone asset creation tool. Our main pipeline (Stages A–G) uses the original Z-Image portrait directly as the identity reference in VNCCS_QWEN_Encoder — no character sheet needed. This workflow exists for creating multi-angle reference art and training data.
+
 ## What it does
 
-Takes a text description (or uses the CharacterCreator node) and generates a multi-angle character sheet. The QWEN version (v1) uses Qwen Image Edit 2511 for higher quality. The v5 version uses the built-in VNCCS pipeline.
+Takes a text description (or uses the CharacterCreator node) and generates a multi-angle character sheet — front, back, side, closeups. The QWEN version (v1) uses Qwen Image Edit 2511 for higher quality. The v5 version uses the built-in VNCCS pipeline.
 
 ### Key Nodes
 
@@ -53,8 +55,16 @@ Multiple images: front view, back view, side views, face closeups — saved sepa
 - VAE: `qwen_image_vae.safetensors`
 - Optional: SDXL checkpoint for v5 variant (`ILFlatMix.safetensors`)
 
-### Downstream
-Character sheets feed into **VNCCS Clothes Generator** (Step 2) and **VNCCS Emotion Studio** (Step 3). A good character sheet with consistent proportions across angles is critical.
+### Use cases
+
+Character sheets are **asset creation tools**, not pose pipeline inputs. Their real value:
+
+- **2D sprite sheets** for games — front/back/side views for walk cycles, idle animations
+- **LoRA training datasets** — consistent multi-angle views of the same character improve LoRA quality
+- **VNCCS downstream editing** — feeds into VNCCS Clothes Generator (Step 2) and Emotion Studio (Step 3) with a consistent reference
+- **Reference art** for manual illustration or further editing
+
+A good character sheet with consistent proportions across angles is critical for all of these.
 
 ---
 

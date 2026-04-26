@@ -43,6 +43,7 @@ const navGroups = [
       { name: "LTX Video 2.3", path: "/docs/stages/ltx-video", icon: "movie" },
       { name: "Post-Processing", path: "/docs/stages/post-process", icon: "auto_awesome" },
       { name: "Lip Sync", path: "/docs/stages/lip-sync", icon: "mic" },
+      { name: "TRELLIS 3D", path: "/docs/stages/trellis", icon: "view_in_ar" },
     ],
   },
   {
@@ -51,6 +52,12 @@ const navGroups = [
       { name: "Node Catalog", path: "/docs/reference/nodes", icon: "category" },
       { name: "Model Inventory", path: "/docs/reference/models", icon: "inventory_2" },
       { name: "App Builder", path: "/docs/reference/app-builder", icon: "widgets" },
+    ],
+  },
+  {
+    title: "Guides",
+    items: [
+      { name: "App System", path: "/docs/guides/app-system", icon: "smart_toy" },
     ],
   },
 ];

@@ -1,0 +1,226 @@
+# TRELLIS — Image-to-3D Asset Generation (Roadmap)
+
+**Status**: Planned — TRELLIS.2 cloned locally, not yet in ComfyUI
+**Category**: 3D Reconstruction
+**Upstream**: [microsoft/TRELLIS.2](https://github.com/microsoft/TRELLIS.2) (v2, 4B params)
+**Local clone**: `/home/ubuntu/Documents/programs/TRELLIS.2/`
+
+---
+
+## What it does
+
+TRELLIS is Microsoft Research's large 3D asset generation model. Given a single 2D image (or multiple views), it generates a full 3D model with **PBR materials** (base color, roughness, metallic, opacity). The v2 model uses a novel **O-Voxel** representation that handles arbitrary topologies — open surfaces, non-manifold geometry, internal structures — unlike v1's iso-surface approach.
+
+TRELLIS.2 is a **real trained model** (4B parameters), not an LLM guessing at geometry.
+
+### Output Formats
+
+| Format | Extension | Use Case |
+|--------|-----------|----------|
+| GLB (textured mesh, PBR) | `.glb` | View in any 3D viewer, import to game engines |
+| PLY (3D Gaussians) | `.ply` | Gaussian splatting pipelines (v1 only) |
+| OBJ/FBX | `.obj`/`.fbx` | Traditional 3D pipelines (via conversion) |
+| Preview video | `.mp4` | Rotating view with PBR + environmental lighting |
+
+### Generation Speed (H100 reference)
+
+| Resolution | Total Time | Shape + Materials |
+|-----------|------------|-------------------|
+| 512^3 | ~3s | 2s + 1s |
+| 1024^3 | ~17s | 10s + 7s |
+| 1536^3 | ~60s | 35s + 25s |
+
+### v1 vs v2 Comparison
+
+| Feature | TRELLIS v1 | TRELLIS.2 |
+|---------|-----------|-----------|
+| Parameters | 1.2B | 4B |
+| Representation | SLAT (iso-surface) | O-Voxel (field-free) |
+| Topology | Closed surfaces only | Arbitrary (open, non-manifold) |
+| Materials | Color only | Full PBR (color, roughness, metallic, opacity) |
+| Texture resolution | 512-2048 | Up to 4096 |
+| Min VRAM | 8-16GB | 24GB |
+| Multi-view | Yes (tuning-free) | Yes (native multi-view nodes) |
+
+---
+
+## Why we want it
+
+### Current problem
+
+Our Stage D (VNCCS QWEN Edit) uses **Anny body mesh renders** as reference images. These are generic humanoid silhouettes — same body shape for every character, just with different joint rotations. The QWEN encoder has to infer the target character's body from this simplified reference, which limits edit quality.
+
+### What TRELLIS enables
+
+If we run TRELLIS on the **generated character image** (from Stage A), we get a **character-specific 3D model** with the actual body shape, proportions, and clothing. This 3D model can then be:
+
+1. **Rendered from any angle** — better than our current Anny mesh for multi-view reference
+2. **Posed** — apply joint rotations to the TRELLIS mesh instead of Anny's generic body
+3. **Used as high-quality reference** for VNCCS QWEN Edit — the encoder sees the actual character geometry, not a stick figure
+
+```
+Current pipeline:
+  Z-Image character -> Anny body mesh (generic) -> VNCCS edit
+
+Future pipeline:
+  Z-Image character -> TRELLIS 3D model (character-specific) -> pose -> render -> VNCCS edit
+```
+
+### Integration point
+
+TRELLIS would slot in between **Stage A** (character generation) and **Stage C** (motion/pose):
+
+```
+A. Z-Image -> character.png
+     |
+B. TRELLIS -> character_3d.glb     <- NEW STAGE
+     |
+C. HY-Motion/MotionDirector -> pose keyframes
+     |
+D. VNCCS Edit (using TRELLIS renders as reference instead of Anny mesh)
+```
+
+---
+
+## ComfyUI Wrappers
+
+### ComfyUI-Trellis2 (recommended for v2)
+
+- **Repo**: [visualbruno/ComfyUI-Trellis2](https://github.com/visualbruno/ComfyUI-Trellis2)
+- **Nodes**: 65+ nodes covering the full pipeline
+- **Actively maintained**: Updates through April 2026
+- **14 example workflows**: mesh-only, mesh+texturing, multi-view, low-poly, projection
+
+This is the most complete wrapper. Key nodes include:
+
+| Node | Purpose |
+|------|---------|
+| `Trellis2LoadModel` | Load TRELLIS.2-4B checkpoint |
+| `Trellis2PreProcessImage` | Prepare image (remove background, padding) |
+| `Trellis2MeshWithVoxelGenerator` | Single-image 3D generation |
+| `Trellis2MeshWithVoxelMultiViewGenerator` | Multi-view 3D generation |
+| `Trellis2MeshTexturing` | Generate PBR textures for a mesh |
+| `Trellis2MeshTexturingMultiView` | Multi-view texturing |
+| `Trellis2SimplifyMesh` | Decimate mesh to target triangle count |
+| `Trellis2ExportMesh` | Export to GLB/OBJ |
+| `Trellis2Remesh` | Remesh with optional quad topology |
+| `Trellis2ReconstructMesh` | Reconstruct watertight mesh |
+| `Trellis2FillHolesWithMeshlib` | Fill mesh holes |
+| `Trellis2RenderMultiView` | Render mesh from multiple angles |
+
+#### Decomposed Generation Pipeline
+
+The wrapper breaks generation into controllable stages:
+
+```
+Trellis2LoadModel (TRELLIS.2-4B)
+     |
+Trellis2ImageCondGenerator (extract DINOv3 features from image)
+     |
+Trellis2SparseGenerator (generate sparse 3D structure)
+     |
+Trellis2ShapeGenerator (generate dense shape latents)
+     |
+Trellis2TexSlatGenerator (generate texture latents)
+     |
+Trellis2DecodeLatents (decode to MeshWithVoxel)
+     |
+Trellis2ExportMesh (save as GLB)
+```
+
+Each stage can be independently controlled (seed, steps, CFG). Multi-view variants exist for sparse, shape, and texture stages.
+
+### IF_Trellis (v1 only)
+
+- **Repo**: [if-ai/ComfyUI-IF_Trellis](https://github.com/if-ai/ComfyUI-IF_Trellis)
+- **Nodes**: `IF_TrellisCheckpointLoader`, `IF_TrellisImageTo3D`
+- **Model**: TRELLIS-image-large (1.2B params)
+- **Features**: Single + multi-view, GLB/Gaussian/texture/wireframe output
+- **Lower VRAM**: 8GB minimum with optimizations
+
+### ComfyUI_TRELLIS (v1 only)
+
+- **Repo**: [smthemex/ComfyUI_TRELLIS](https://github.com/smthemex/ComfyUI_TRELLIS)
+- **Nodes**: `Trellis_LoadModel`, `Trellis_Sampler`, `Trellis_multiimage_loader`
+- **Features**: Image + text-to-3D, OBJ/FBX conversion
+
+---
+
+## Models Required
+
+### TRELLIS.2 (recommended)
+
+| Component | Size | Location |
+|-----------|------|----------|
+| TRELLIS.2-4B checkpoint | 11GB | `models/TRELLIS.2-4B/` (already downloaded) |
+| DINOv3 ViT-L/16 | ~1.2GB | `models/facebook/dinov3-vitl16-pretrain-lvd1689m/` |
+
+The checkpoint includes 8 sub-models: shape encoder/decoder, texture encoder/decoder, sparse structure flow, shape flow (512 + 1024), texture flow.
+
+### TRELLIS v1 (alternative)
+
+| Component | Size | Source |
+|-----------|------|--------|
+| TRELLIS-image-large | ~2GB | [HuggingFace](https://huggingface.co/JeffreyXiang/TRELLIS-image-large) |
+| DINOv2 ViT-L/14 | ~300MB | [Meta](https://dl.fbaipublicfiles.com/dinov2/dinov2_vitl14/dinov2_vitl14_reg4_pretrain.pth) |
+
+### Dependencies (TRELLIS.2)
+
+| Package | Purpose | Notes |
+|---------|---------|-------|
+| `o_voxel` | O-Voxel representation | Custom, bundled |
+| `cumesh` | CUDA mesh processing | Pre-built wheels available |
+| `flex_gemm` | Sparse convolution via Triton | Custom, bundled |
+| `nvdiffrast` | Differentiable rendering | NVIDIA, wheels available |
+| `nvdiffrec` | PBR split-sum renderer | NVIDIA |
+| `meshlib` | Hole filling, mesh repair | Commercial, free for non-commercial |
+| `flash-attn` | Attention backend | Already installed |
+
+### Hardware
+
+- **TRELLIS.2**: 24GB VRAM minimum (tested on A100/H100)
+- **TRELLIS v1**: 16GB minimum, 8GB with optimizations
+- **Our RTX 4090 (24GB)**: Meets TRELLIS.2 minimum but tight — will need to stop llama.cpp and HY-Motion's Qwen3
+
+---
+
+## Installation (when ready)
+
+We already have TRELLIS.2 cloned with models at `/home/ubuntu/Documents/programs/TRELLIS.2/` with a Python 3.12 venv. The ComfyUI integration path:
+
+```bash
+cd /path/to/comfyui/custom_nodes
+
+# Option A: ComfyUI-Trellis2 (v2, recommended)
+git clone https://github.com/visualbruno/ComfyUI-Trellis2.git
+cd ComfyUI-Trellis2
+pip install -r requirements.txt
+
+# Install pre-built CUDA wheels (Linux, Torch 2.10, CUDA 13.1)
+pip install wheels/Linux/cumesh-*.whl wheels/Linux/nvdiffrast-*.whl \
+            wheels/Linux/nvdiffrec-*.whl wheels/Linux/flex_gemm-*.whl \
+            wheels/Linux/o_voxel-*.whl
+
+# Download DINOv3 (required for image conditioning)
+cd /path/to/comfyui/models
+mkdir -p facebook/dinov3-vitl16-pretrain-lvd1689m
+# Clone from HuggingFace into that directory
+```
+
+### Blocking issues
+
+- **VRAM contention**: TRELLIS.2 needs ~24GB, our 4090 has 24GB. Must stop llama.cpp and HY-Motion first.
+- **CUDA wheels**: Need matching wheels for our PyTorch 2.10 + CUDA 13.1 combo
+- **Triton compilation**: The FlexGEMM sparse conv uses Triton kernels that need JIT compilation
+- **Anime quality**: Trained on Objaverse (mostly realistic objects). Anime character quality is untested.
+- **Rigging**: Generated meshes have no skeleton — we'd need auto-rigging (e.g., Mixamo) before posing
+
+---
+
+## Open questions
+
+- Can TRELLIS.2 meshes be auto-rigged for posing? (needed for our pose pipeline)
+- Quality on anime-style characters? Trained on Objaverse — may bias realistic
+- Can we use the decomposed pipeline to skip texture generation and just get geometry?
+- VRAM budget — can we fit TRELLIS.2 + VNCCS in 24GB? Probably need to offload TRELLIS after generation
+- Would the character turnaround sheet (VNCCS Char Sheet) feed nicely into multi-view TRELLIS generation?

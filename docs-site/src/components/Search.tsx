@@ -15,6 +15,7 @@ const docsIndex = [
   { title: "LTX Video 2.3", path: "/docs/stages/ltx-video", content: "Stage E: animate between keyframes with LTX Video.", category: "Stages" },
   { title: "Post-Processing", path: "/docs/stages/post-process", content: "Stage F: fix artifacts with LTX EditAnything IC-LoRA.", category: "Stages" },
   { title: "Lip Sync", path: "/docs/stages/lip-sync", content: "Stage G: audio-driven mouth animation (placeholder).", category: "Stages" },
+  { title: "TRELLIS 3D", path: "/docs/stages/trellis", content: "Roadmap: image-to-3D mesh generation for better pose reference.", category: "Stages" },
   { title: "VNCCS Char Sheet", path: "/docs/vnccs/char-sheet", content: "Generate multi-angle character sheets.", category: "VNCCS" },
   { title: "VNCCS Clone Character", path: "/docs/vnccs/clone-character", content: "Recreate a character from an existing image.", category: "VNCCS" },
   { title: "VNCCS Clothes", path: "/docs/vnccs/clothes", content: "Change character clothing with reference consistency.", category: "VNCCS" },
@@ -25,6 +26,7 @@ const docsIndex = [
   { title: "Node Catalog", path: "/docs/reference/nodes", content: "All 8 Pose Director custom nodes.", category: "Reference" },
   { title: "Model Inventory", path: "/docs/reference/models", content: "All models used across the pipeline with sizes.", category: "Reference" },
   { title: "App Builder", path: "/docs/reference/app-builder", content: "Auto-generated .app.json files for ComfyUI Apps.", category: "Reference" },
+  { title: "App System Guide", path: "/docs/guides/app-system", content: "How the automated ComfyUI App generation system works end-to-end.", category: "Guides" },
 ];
 
 export default function Search() {

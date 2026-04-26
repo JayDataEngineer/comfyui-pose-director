@@ -10,6 +10,9 @@ Usage:
 
     # Custom poses from PoseLibrary
     python scripts/run_sprite_batch.py --poses 3 Seeking exercises1
+
+    # HY-Motion NPZ → sprite frames
+    python scripts/run_sprite_batch.py --hymotion output/hymotion_wave.npz --directions front
 """
 
 import io
@@ -174,6 +177,127 @@ def remove_background(img_bytes: bytes) -> bytes:
     return buf.getvalue()
 
 
+def run_hymotion_batch(
+    npz_path: str | Path,
+    character_image: str = "PoseDirector/character.png",
+    character_bytes: bytes | None = None,
+    directions: list[str] | None = None,
+    num_keyframes: int = 6,
+    seed: int | None = None,
+    remove_bg: bool = False,
+    animation_name: str = "hymotion",
+):
+    """Run sprite pipeline from HY-Motion NPZ output.
+
+    Extracts keyframes from the NPZ, converts to Anny bone rotations,
+    and renders each keyframe through the VNCCS edit pipeline.
+    """
+    from utils.hymotion_converter import extract_keyframes
+
+    if seed is None:
+        seed = random.randint(0, 999999)
+    if directions is None:
+        directions = ["front"]
+
+    npz_path = Path(npz_path)
+    if not npz_path.exists():
+        log(f"ERROR: HY-Motion NPZ not found: {npz_path}")
+        sys.exit(1)
+
+    log(f"Extracting {num_keyframes} keyframes from {npz_path.name}")
+    keyframes = extract_keyframes(npz_path, num_keyframes)
+    log(f"Extracted {len(keyframes)} keyframes with {len(keyframes[0])} joints each")
+
+    # Build job list: (animation_name, keyframe_index, direction, rotations_dict)
+    jobs: list[tuple[str, int, str, dict]] = []
+    for kf_idx, rotations in enumerate(keyframes):
+        for d in directions:
+            jobs.append((animation_name, kf_idx, d, rotations))
+
+    # Setup output directory
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_dir = PROJECT_ROOT / "output" / f"batch_{ts}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    # Verify ComfyUI is up
+    try:
+        r = requests.get(f"{COMFYUI_URL}/system_stats", timeout=5)
+        assert r.status_code == 200
+    except Exception as e:
+        log(f"ERROR: ComfyUI not reachable at {COMFYUI_URL}: {e}")
+        sys.exit(1)
+    log(f"ComfyUI ready at {COMFYUI_URL}")
+
+    if character_bytes:
+        upload_image(character_bytes, "character.png", "PoseDirector")
+        log(f"Uploaded character image ({len(character_bytes)} bytes)")
+
+    log(f"HY-Motion batch: {len(jobs)} frames ({len(keyframes)} keyframes x {len(directions)} directions)")
+    start_total = time.time()
+
+    results = []
+    for i, (anim_name, kf_idx, direction, rotations) in enumerate(jobs):
+        frame_label = f"[{i+1}/{len(jobs)}] kf{kf_idx}/{direction}"
+        log(f"{frame_label} ...")
+
+        # Convert Anny bone names to VNCCS bone names for the pipeline
+        rotations_json = json.dumps(rotations)
+        frame_seed = seed + i
+        t0 = time.time()
+
+        try:
+            img_bytes = run_single_frame(character_image, rotations_json, direction, frame_seed)
+        except Exception as e:
+            log(f"  ERROR: {e}")
+            continue
+
+        elapsed = time.time() - t0
+
+        if img_bytes:
+            if remove_bg:
+                try:
+                    img_bytes = remove_background(img_bytes)
+                except Exception as e:
+                    log(f"  BG removal failed ({e}), saving with background")
+
+            anim_dir = run_dir / anim_name
+            anim_dir.mkdir(exist_ok=True)
+            out_path = anim_dir / f"kf{kf_idx:03d}_{direction}.png"
+            out_path.write_bytes(img_bytes)
+
+            img = Image.open(io.BytesIO(img_bytes))
+            log(f"  OK: {img.size[0]}x{img.size[1]} {img.mode}, {elapsed:.1f}s")
+            results.append({
+                "animation": anim_name,
+                "keyframe": kf_idx,
+                "direction": direction,
+                "path": str(out_path),
+                "size": list(img.size),
+                "transparent": remove_bg,
+            })
+        else:
+            log(f"  ERROR: No output image")
+
+    total_elapsed = time.time() - start_total
+
+    manifest = {
+        "character": character_image,
+        "source": str(npz_path),
+        "keyframes": len(keyframes),
+        "seed_base": seed,
+        "total_frames": len(results),
+        "total_time_s": round(total_elapsed, 1),
+        "frames": results,
+    }
+    manifest_path = run_dir / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+    log(f"Manifest: {manifest_path}")
+
+    log(f"Done: {len(results)}/{len(jobs)} frames in {total_elapsed:.1f}s")
+    log(f"Output: {run_dir}")
+    return run_dir
+
+
 def run_batch(
     character_image: str = "PoseDirector/character.png",
     character_bytes: bytes | None = None,
@@ -207,7 +331,7 @@ def run_batch(
             for d in directions:
                 jobs.append(("custom", pose_name, d))
     else:
-        log("ERROR: Specify --animations or --poses")
+        log("ERROR: Specify --animations, --poses, or --hymotion")
         sys.exit(1)
 
     if not jobs:
@@ -313,20 +437,34 @@ def main():
     parser.add_argument("--animations", nargs="+", default=None,
                        help=f"Animation presets: {list(ANIMATION_PRESETS.keys())}")
     parser.add_argument("--poses", nargs="+", default=None, help="Custom pose names from PoseLibrary")
+    parser.add_argument("--hymotion", default=None, help="HY-Motion NPZ file to convert to sprites")
+    parser.add_argument("--num-keyframes", type=int, default=6, help="Keyframes to extract from HY-Motion")
+    parser.add_argument("--hymotion-name", default="hymotion", help="Animation name for HY-Motion output")
     parser.add_argument("--directions", nargs="+", default=["front"],
                        help="Directions: front right back left")
     parser.add_argument("--remove-bg", action="store_true", help="Remove background (transparent sprites)")
     parser.add_argument("--seed", type=int, default=None, help="Base random seed")
     args = parser.parse_args()
 
-    run_batch(
-        character_image=args.character,
-        animations=args.animations,
-        poses=args.poses,
-        directions=args.directions,
-        seed=args.seed,
-        remove_bg=args.remove_bg,
-    )
+    if args.hymotion:
+        run_hymotion_batch(
+            npz_path=args.hymotion,
+            character_image=args.character,
+            directions=args.directions,
+            num_keyframes=args.num_keyframes,
+            seed=args.seed,
+            remove_bg=args.remove_bg,
+            animation_name=args.hymotion_name,
+        )
+    else:
+        run_batch(
+            character_image=args.character,
+            animations=args.animations,
+            poses=args.poses,
+            directions=args.directions,
+            seed=args.seed,
+            remove_bg=args.remove_bg,
+        )
 
 
 if __name__ == "__main__":

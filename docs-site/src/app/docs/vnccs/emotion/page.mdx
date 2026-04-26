@@ -1,0 +1,30 @@
+# VNCCS Emotion Studio
+
+**Workflows**: `VN_Step3_QWEN_EmotionStudio_V1.json`, `VN_Step3_CharEmotionGeneratorV6.json`
+**Extension**: VNCCS
+**Category**: Character Editing
+
+---
+
+## What it does
+
+Changes facial expressions on a character while preserving everything else. Feed in a character image and specify the desired emotion.
+
+### Key Nodes
+
+| Node | Purpose |
+|------|---------|
+| **VNCCS_Pipe** | Generation pipeline with expression conditioning |
+| **SaveImage** | Outputs the emotion-modified character |
+
+### Use case
+Generate a character with neutral expression first, then create multiple emotion variants:
+- Happy, sad, angry, surprised, etc.
+- Useful for game sprites, visual novels, animation
+
+### Dependencies
+- **Input**: Character image (from Step 1 or Step 2)
+- **Models**: Qwen Image Edit 2511 + CLIP + VAE
+
+### Downstream
+Emotion variants can feed into **VNCCS Sprite Creator** (Step 4) for game-ready sprite sheets.

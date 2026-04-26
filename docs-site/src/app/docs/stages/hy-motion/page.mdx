@@ -1,0 +1,64 @@
+# HY-Motion — Text-to-3D Motion Generation
+
+**Workflows**: 5 variants (workflow.json, workflow-gguf.json, workflow-glb.json, workflow-mixamo.json, workflow-rewrite prompt.json)
+**Extension**: ComfyUI-HY-Motion1
+**Category**: Pose & Motion
+
+---
+
+## What it does
+
+Tencent Hunyuan's trained motion diffusion model. Give it a text description and it generates realistic 3D human motion — not LLM guessing, but a trained DiT with Flow Matching.
+
+### The 5 Workflow Variants
+
+| Workflow | Difference |
+|----------|------------|
+| `workflow.json` | Standard: bnb-4bit text encoder, standard output |
+| `workflow-gguf.json` | Uses GGUF quantized text encoder (slower, avoid) |
+| `workflow-glb.json` | Exports to GLB (3D model format, viewable in browsers) |
+| `workflow-mixamo.json` | Exports to Mixamo-compatible format (game engines) |
+| `workflow-rewrite prompt.json` | Includes a prompt rewriter for better motion descriptions |
+
+### Pipeline Flow
+
+```
+HYMotionLoadLLM (Qwen3-8B on CPU)
+       ↓
+HYMotionEncodeText ("wave hello")
+       ↓
+HYMotionLoadNetwork (HY-Motion-1.0 on GPU)
+       ↓
+HYMotionGenerate (duration, seed, cfg_scale)
+       ↓
+HYMotionPreview → IMAGE preview
+       ↓
+HYMotionExportFBX → FBX/NPZ export
+```
+
+### Inputs
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| text | STRING | — | Motion description |
+| duration | INT | — | Motion length |
+| seed | INT | random | Reproducibility |
+| cfg_scale | FLOAT | — | Guidance strength |
+| num_samples | INT | 1 | Number of motion samples |
+
+### Models & VRAM
+
+| Component | Size | Location |
+|-----------|------|----------|
+| Motion model | 3.9GB | GPU |
+| CLIP | 1.7GB | GPU |
+| Qwen3-8B (bnb-4bit) | 5.7GB | CPU (offload_to_cpu=True) |
+| **Total GPU** | **~5.7GB** | |
+
+### Critical Notes
+- **Must stop llama.cpp first!** Even though HY-Motion only uses ~6GB GPU, llama.cpp hogs 19GB
+- Use bnb-4bit text encoder, NOT GGUF — GGUF has slow tensor de-quantization
+- The model generates motion data, not images — HYMotionPreview renders a stick figure
+- For our pipeline, we convert motion data to body mesh keyframes via `MotionMeshRenderer`
+
+### Downstream
+Motion data (rotations JSON) feeds into **Pose Director's Stage D** where Anny renders 3D body meshes, then VNCCS applies those poses to the character.

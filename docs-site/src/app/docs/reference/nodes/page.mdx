@@ -1,0 +1,94 @@
+# Node Catalog — All Custom Nodes
+
+All nodes registered by the Pose Director extension.
+
+---
+
+## 1. PoseManipulator
+
+**Inputs**: keypoints (POSE_KEYPOINT), instruction (STRING)
+**Outputs**: IMAGE, STRING, POSE_KEYPOINT
+
+Takes an existing OpenPose skeleton and a text instruction. Sends both to an LLM which recalculates joint positions based on the instruction. Returns the modified skeleton as an image.
+
+**Example**: Input a standing pose + "raise right arm" → skeleton with arm raised.
+
+---
+
+## 2. MotionDirector
+
+**Inputs**: motion_description (STRING), num_keyframes (INT), total_frames (INT), base_url (STRING), model (STRING)
+**Outputs**: IMAGE batch, STRING (rotations JSON), STRING (keyframes JSON)
+
+Generates N keyframe poses from a text description. Each keyframe is a complete body pose. Outputs are:
+- IMAGE batch: rendered Anny body meshes for each keyframe
+- rotations JSON: joint rotation angles per keyframe
+- keyframes JSON: timing data for interpolation
+
+---
+
+## 3. PoseRenderer
+
+**Inputs**: keypoints (STRING — JSON)
+**Outputs**: IMAGE
+
+Renders OpenPose keypoints JSON as a color-coded skeleton image. Used for visualization.
+
+---
+
+## 4. PoseExtractor
+
+**Inputs**: pose_keypoint (POSE_KEYPOINT)
+**Outputs**: STRING (JSON), INT (width), INT (height)
+
+Extracts raw keypoint data from ComfyUI's POSE_KEYPOINT format into a flat JSON string. Handles denormalization from 0-1 coordinates to pixel coordinates.
+
+---
+
+## 5. KeyframeReviewer
+
+**Inputs**: images (IMAGE batch)
+**Outputs**: STRING (review), BOOLEAN (passed), INT (score)
+
+Sends a batch of keyframe images to a vision LLM for quality review. Returns:
+- Text review of pose consistency
+- Pass/fail boolean
+- Numeric score (0-100)
+
+---
+
+## 6. BodyMeshRenderer
+
+**Inputs**: rotations_json (STRING)
+**Outputs**: IMAGE
+
+Takes joint rotation angles (degrees from rest pose) and renders an Anny 3D body mesh using pyrender (headless OpenGL). Deterministic output — same rotations = same render.
+
+**Anny details**: 13,718 vertices, 27,420 faces, 163 bones. Uses Z-up convention.
+
+---
+
+## 7. AnimationExporter
+
+**Inputs**: rotations_json, keyframes_json, total_frames, fps
+**Outputs**: IMAGE (preview), STRING (BVH path), STRING (video path)
+
+Interpolates between keyframes using SLERP (quaternion spherical interpolation), then exports as:
+- BVH file (for game engines)
+- MP4/GIF preview
+- Preview image of the motion sequence
+
+BVH uses a 15-bone Y-up hierarchy (not Anny's full 163 bones — game engines re-target).
+
+---
+
+## 8. PromptEnhancer
+
+**Inputs**: prompt (STRING), variant (COMBO: turbo/base)
+**Outputs**: STRING (enhanced prompt)
+
+Takes a simple character description and expands it into a detailed Z-Image prompt following the PREPROMPT.md methodology:
+- **Turbo mode**: 80-200 words, no negative prompt
+- **Base mode**: includes negative prompt section
+
+Uses OpenRouter (deepseek-v4-pro) by default.

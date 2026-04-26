@@ -1,0 +1,42 @@
+# Stage A: Z-Image Character Generation
+
+**Workflow**: `00_z_image_character.json`
+**Extension**: Pose Director
+
+---
+
+## What it does
+
+Generates a full-body character portrait using Z-Image Turbo (distilled SD3 variant). This is the starting point for the entire pipeline.
+
+### Pipeline Flow
+
+```
+UNETLoader (z_image_turbo_bf16) ──→ Model
+CLIPLoader (qwen_3_4b, lumina2) ──→ CLIP
+VAELoader (ae.safetensors)     ──→ VAE
+
+Model → ModelSamplingAuraFlow (shift=3) → Sampled Model
+CLIP + "character prompt" → CLIPTextEncode → Positive Conditioning
+CLIP + "" → ConditioningZeroOut → Negative Conditioning (zeroed)
+EmptySD3LatentImage (768x1024) → Empty Canvas
+
+KSampler (8 steps, CFG 1.0, res_multistep, simple)
+  → VAEDecode → SaveImage ("PoseDirector/character")
+```
+
+### Key Details
+
+- **No negative prompt** — turbo mode doesn't need it (ConditioningZeroOut zeros it out)
+- **Portrait orientation** (768x1024) — required for head-to-toe characters
+- **8 steps** — Z-Image Turbo is distilled, 8 steps is the sweet spot
+- **CFG 1.0** — guidance scale of 1.0 (minimal guidance, turbo mode)
+- **shift=3** — ModelSamplingAuraFlow sets the noise schedule shift for S3-DiT
+
+### Critical for downstream
+The character image feeds into **every VNCCS edit** in Stage D. If the character has anatomical errors (extra fingers, weird proportions), ALL keyframes will inherit those errors.
+
+**Prompt tips**:
+- Always include "full body" if you want head-to-toe
+- Specify art style explicitly ("anime style", "photorealistic")
+- Mention clothing to lock it in early

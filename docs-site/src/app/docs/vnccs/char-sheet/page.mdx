@@ -1,0 +1,68 @@
+# VNCCS Character Sheet Generator
+
+**Workflows**: `VN_Step1_QWEN_CharSheetGenerator_v1.json`, `VN_Step1_CharSheetGenerator_v5.json`
+**Extension**: VNCCS
+**Category**: Character Generation
+
+---
+
+## What it does
+
+Takes a text description (or uses the CharacterCreator node) and generates a multi-angle character sheet. The QWEN version (v1) uses Qwen Image Edit 2511 for higher quality. The v5 version uses the built-in VNCCS pipeline.
+
+### Key Nodes
+
+| Node | Purpose |
+|------|---------|
+| **CharacterCreator** | Builds a character from parameters (sex, age, race, eyes, hair, etc.) |
+| **VNCCS_PoseGenerator** | Generates OpenPose poses from JSON (multiple poses for sheet) |
+| **VNCCS_Pipe** | The core VNCCS sampling pipeline (seed, steps, cfg, denoise) |
+| **VNCCS_Resize** | Upscales output to target resolution (default 6144x6144) |
+
+### CharacterCreator Parameters
+
+| Param | Type | Example | Description |
+|-------|------|---------|-------------|
+| sex | COMBO | "female" | Character gender |
+| age | INT | 18 | Character age |
+| race | STRING | "human" | Species/race |
+| eyes | STRING | "blue eyes" | Eye description |
+| hair | STRING | "black short" | Hair description |
+| seed | INT | random | Reproducibility |
+| new_character_name | STRING | — | Name for the character |
+| negative_prompt | STRING | — | What to avoid |
+
+### VNCCS_Pipe Parameters
+
+Each VNCCS_Pipe instance controls one generation pass:
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| seed_int | INT | random | Seed for this pass |
+| sample_steps | INT | 20 | Sampling steps |
+| cfg | FLOAT | 7 | Classifier-free guidance |
+| denoise | FLOAT | 0-1 | Denoising strength |
+| sampler_name | COMBO | "euler" | Sampler algorithm |
+| scheduler | COMBO | "simple" | Noise schedule |
+
+### Outputs
+Multiple images: front view, back view, side views, face closeups — saved separately.
+
+### Dependencies
+- UNET: Qwen Image Edit 2511 (GGUF or BF16)
+- CLIP: `qwen_2.5_vl_7b_fp8_scaled.safetensors`
+- VAE: `qwen_image_vae.safetensors`
+- Optional: SDXL checkpoint for v5 variant (`ILFlatMix.safetensors`)
+
+### Downstream
+Character sheets feed into **VNCCS Clothes Generator** (Step 2) and **VNCCS Emotion Studio** (Step 3). A good character sheet with consistent proportions across angles is critical.
+
+---
+
+## VNCCS Clone Existing Character
+
+**Workflow**: `VN_Step1.1_QWEN_Clone_Existing_Character_v1.json`
+
+Same as above but takes an **existing image** instead of text parameters. Uses the image as reference latents to recreate the character in the VNCCS pipeline.
+
+### Use case
+You have a character you already drew or generated elsewhere and want to bring it into the VNCCS ecosystem for clothes/emotion editing.

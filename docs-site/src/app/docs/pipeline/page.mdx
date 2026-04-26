@@ -1,0 +1,182 @@
+# Pipeline Flow — How It All Connects
+
+Detailed data flow between stages, showing exactly what passes from one workflow to the next.
+
+---
+
+## Data Types at Each Stage
+
+```
+Stage A ─── IMAGE (768x1024, character.png) ───┐
+                                                 │
+Stage C ─── IMAGE batch (N keyframes, 3D mesh) ─┤
+           STRING (rotations JSON)               │
+           STRING (keyframes JSON)               │
+                                                 │
+Stage D ─── IMAGE batch (N edited keyframes) ────┤
+           (character + mesh → posed character)   │
+                                                 │
+Stage E ─── VIDEO (MP4, animated between KFs) ───┘
+```
+
+## Stage A: Character Generation
+
+**Workflow**: `00_z_image_character.json`
+**Extension**: Pose Director
+**Runtime**: ~50s warm, ~5min cold start
+
+### What it does
+Generates a full-body character portrait using Z-Image Turbo (a distilled SD3 variant). No negative prompt needed — turbo mode.
+
+### Inputs
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| prompt | STRING | — | Character description ("a cute anime girl with blue hair...") |
+| width | INT | 768 | Canvas width |
+| height | INT | 1024 | Canvas height (portrait for full-body) |
+| seed | INT | random | Reproducibility |
+| steps | INT | 8 | Sampling steps (turbo = 8 is fine) |
+| cfg | FLOAT | 1.0 | Guidance scale (1.0 for turbo) |
+
+### Outputs
+- `character.png` — the generated character image
+
+### Models Used
+- UNET: `z_image_turbo_bf16.safetensors`
+- CLIP: `qwen_3_4b.safetensors` (type: lumina2)
+- VAE: `ae.safetensors`
+
+### Failure modes
+- **Anatomical errors** (extra fingers, merged limbs) — 8 steps is too few for perfect anatomy
+- **Cropped body** — prompt must specify "full body" and resolution must be portrait
+- **Wrong style** — prompt needs to be specific about art style
+
+### Downstream impact
+This image feeds into **every VNCCS edit** in Stage D. A bad character means all keyframes look bad. **Spend time getting this right.**
+
+---
+
+## Stage C: Pose & Motion
+
+**Workflow**: `01_hymotion_keyframes.json`
+**Extension**: Pose Director + HY-Motion
+**Runtime**: ~60s
+**VRAM**: ~11GB (must stop llama.cpp first!)
+
+### What it does
+Takes a text description of a motion ("wave hello", "walk cycle") and generates 3D keyframe poses. Uses HY-Motion's trained DiT — not LLM guessing, actual trained motion diffusion.
+
+### Inputs
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| text | STRING | — | Motion description |
+| duration | INT | — | Motion length in frames |
+| seed | INT | random | Reproducibility |
+| cfg_scale | FLOAT | — | Classifier-free guidance |
+
+### Outputs
+- IMAGE batch of keyframe renders (3D body mesh, not the character)
+- STRING of rotations JSON (joint angles for each keyframe)
+- STRING of keyframes JSON (timing data)
+
+### Models Used
+- Motion model: `tencent/HY-Motion-1.0/` (3.9GB on GPU)
+- Text encoder: `Qwen3-8B-bnb-4bit/` (5.7GB, loaded on CPU)
+- CLIP: `clip-vit-large-patch14/` (1.7GB on GPU)
+
+### Failure modes
+- **VRAM OOM** — llama.cpp MUST be stopped first (`docker stop orchestrator-llama`)
+- **Motion too fast/slow** — adjust duration parameter
+- **Wrong motion** — text encoder misunderstanding, try simpler descriptions
+
+### Downstream impact
+The keyframe mesh images feed into **Stage D VNCCS edits**. Bad poses = bad edits. The rotations JSON is also needed for BVH export and animation preview.
+
+---
+
+## Stage D: VNCCS Edit (Apply Pose to Character)
+
+**Workflow**: `02_vnccs_edit_mesh.json` or `03_motion_keyframes_qwen_edit_mesh.json`
+**Extension**: Pose Director
+**Runtime**: ~145s per keyframe at 40 steps
+
+### What it does
+Takes the character image + a 3D body mesh keyframe and edits the character INTO that pose. Uses VNCCS reference latent injection — NOT ControlNet. The character's appearance is preserved through timestep-zero latent injection.
+
+### Inputs
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| image1 | IMAGE | character.png | The reference character |
+| image2 | IMAGE | keyframe_mesh | The pose mesh to apply |
+| instruction | STRING | — | What to do ("repose the character to match the body shape and pose") |
+| weight1 | FLOAT | 1.0 | Reference image weight |
+| weight2 | FLOAT | 1.0 | Pose image weight |
+| target_size | INT | 1024 | Output resolution |
+
+### Outputs
+- IMAGE of the edited character in the new pose
+
+### Models Used
+- UNET: `qwen-image-edit-2511-Q5_0.gguf` (Qwen Image Edit)
+- CLIP: `qwen_2.5_vl_7b_fp8_scaled.safetensors`
+
+### Failure modes
+- **Character drift** — weights too low, character changes appearance between frames
+- **Pose not followed** — weights too low on image2, or instruction too vague
+- **Background warping** — increase padding or use larger canvas
+- **Facial distortion** — increase steps from 30 to 40
+
+### Downstream impact
+These edited keyframes feed into **Stage E video assembly**. Inconsistent lighting/appearance between keyframes causes flickering in the final video.
+
+---
+
+## Stage E: LTX Video Assembly
+
+**Workflow**: `04_ltx_video_assembly.json`
+**Extension**: Pose Director + LTXVideo
+**Runtime**: ~250s
+
+### What it does
+Takes the edited keyframe images and generates a video that animates between them. Uses LTX Video 2.3 with keyframe guide injection at specific frame indices.
+
+### Inputs
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| keyframe images | IMAGE | — | The edited keyframes from Stage D |
+| frame indices | INT[] | — | Which frames each keyframe appears at (must be divisible by 8) |
+| width | INT | 768 | Video width |
+| height | INT | 1024 | Video height |
+| length | INT | 97 | Total frames |
+| seed | INT | random | Reproducibility |
+
+### Outputs
+- VIDEO (MP4)
+
+### Models Used
+- UNET: `ltx-2.3-22b-distilled-1.1-UD-Q4_K_M.gguf` (16.4GB)
+- Text: Gemma 3 12B via LTXVGemmaCLIPModelLoader
+- VAE (full): `LTX23_video_vae_bf16.safetensors` — required for guide injection
+
+### Failure modes
+- **Flickering** — inconsistent keyframes from Stage D
+- **Morphing** — keyframe guides too weak, increase strength
+- **OOM** — LTX 2.3 22B is massive, reduce resolution or length
+- **Wrong frame alignment** — frame_idx must be divisible by 8
+
+### Downstream impact
+This is the final video output. Stage F post-processing can fix minor artifacts but can't fix fundamental motion problems.
+
+---
+
+## Stage F: Post-Processing
+
+**Workflow**: `06_ltx_edit_anything_postprocess.json`
+**Extension**: Pose Director + LTXVideo
+**Runtime**: variable
+
+### What it does
+Uses LTX EditAnything with IC-LoRA to fix artifacts in the generated video — remove hallucinated text, smooth transitions, clean up backgrounds.
+
+### Downstream impact
+Optional but recommended for production output. Lip sync (Stage G) would come after this.

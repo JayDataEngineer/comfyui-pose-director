@@ -1,0 +1,91 @@
+# App Builder Reference
+
+Auto-generated `.app.json` files from all extension workflows.
+
+---
+
+## What are ComfyUI Apps?
+
+ComfyUI's native App Builder converts workflows into simplified webapps. Instead of seeing the full node graph, users get a clean form with just the exposed inputs (prompts, seeds, sliders) and outputs (images, videos).
+
+Apps appear in ComfyUI's **Apps sidebar tab** automatically when `.app.json` files exist in the Workflows directory.
+
+## Generation Script
+
+```bash
+# Generate all apps
+uv run python scripts/build_comfyui_apps.py
+
+# One extension
+uv run python scripts/build_comfyui_apps.py --source vnccs
+
+# Preview without writing
+uv run python scripts/build_comfyui_apps.py --dry-run
+
+# No ComfyUI running
+uv run python scripts/build_comfyui_apps.py --offline
+```
+
+## App Locations
+
+```
+comfyui/Workflows/apps/
+├── animation/
+│   └── charspritecreatorv5.app.json
+├── character_editing/
+│   ├── 02_vnccs_edit_keyframe.app.json
+│   ├── 02_vnccs_edit_mesh.app.json
+│   ├── 03_motion_keyframes_qwen_edit_mesh.app.json
+│   ├── clothesgenerator.app.json
+│   ├── emotionstudio_v1.app.json
+│   ├── qwendetailer_changeemotion.app.json
+│   └── visual_camera_control_*.app.json
+├── character_generation/
+│   ├── 00_z_image_character.app.json
+│   ├── charsheetgenerator.app.json
+│   └── clone_existing_character.app.json
+├── pose_motion/
+│   ├── 01_hymotion_keyframes.app.json
+│   ├── gguf.app.json
+│   ├── glb.app.json
+│   ├── mixamo.app.json
+│   ├── pose_studio.app.json
+│   ├── rewrite_prompt.app.json
+│   └── workflow.app.json
+├── post-processing/
+│   └── 06_ltx_edit_anything_postprocess.app.json
+├── utility/
+│   ├── 07_lip_sync.app.json
+│   └── model_loader_showcase.app.json
+└── video/
+    └── 04_ltx_video_assembly.app.json
+```
+
+## .app.json Format
+
+A regular ComfyUI workflow JSON with extra metadata:
+
+```json
+{
+  "nodes": [...],
+  "links": [...],
+  "extra": {
+    "linearMode": true,
+    "linearData": {
+      "inputs": [["node_id", "widget_name"], ...],
+      "outputs": ["node_id"]
+    }
+  }
+}
+```
+
+- `inputs`: Array of `[node_id, widget_name]` pairs for exposed controls
+- `outputs`: Array of node IDs for displayed outputs
+- ComfyUI's frontend reads `linearData` to build the simplified UI
+
+## Adding New Workflows
+
+1. Place the workflow JSON in the appropriate `workflows/` directory
+2. If it uses new node types, add them to `EXPOSE_RULES` and `NODE_SCHEMAS` in `scripts/build_comfyui_apps.py`
+3. Re-run the script: `uv run python scripts/build_comfyui_apps.py`
+4. The new app appears in ComfyUI's Apps sidebar after refresh

@@ -1,0 +1,81 @@
+# Model Inventory
+
+All models used across the pipeline, organized by stage.
+
+---
+
+## Shared Models Location
+
+All models live in: `/home/ubuntu/Documents/programs/shared-docker-infra/models/image-gen/comfyui/`
+
+ComfyUI is configured with `--model-base-dir` pointing here.
+
+---
+
+## Stage A: Character Generation (Z-Image Turbo)
+
+| Model | File | Size | Type |
+|-------|------|------|------|
+| UNET | `checkpoints/z_image_turbo_bf16.safetensors` | ~6GB | Checkpoint |
+| CLIP | `clip/qwen_3_4b.safetensors` | ~4GB | Text Encoder |
+| VAE | `vae/ae.safetensors` | ~300MB | Autoencoder |
+
+---
+
+## Stage C: HY-Motion
+
+| Model | File | Size | Location |
+|-------|------|------|----------|
+| Motion DiT | `HY-Motion/ckpts/tencent/HY-Motion-1.0/` | 3.9GB | GPU |
+| Text Encoder | `HY-Motion/ckpts/Qwen3-8B-bnb-4bit/` | 5.7GB | CPU |
+| CLIP | `HY-Motion/ckpts/clip-vit-large-patch14/` | 1.7GB | GPU |
+
+**VRAM**: ~5.7GB GPU total. Must stop llama.cpp first.
+
+---
+
+## Stage D: VNCCS Edit
+
+| Model | File | Size | Type |
+|-------|------|------|------|
+| UNET (GGUF) | `diffusion_models/qwen-image-edit-2511-Q5_0.gguf` | ~5GB | Qwen Image Edit |
+| CLIP | `clip/qwen_2.5_vl_7b_fp8_scaled.safetensors` | ~7GB | Text Encoder |
+| VAE | `vae/qwen_image_vae.safetensors` | ~300MB | Autoencoder |
+| LoRA (camera) | `loras/qwen-image-edit-2511-multiple-angles-lora.safetensors` | — | Camera angles |
+
+---
+
+## Stage E: LTX Video 2.3
+
+| Model | File | Size | Type |
+|-------|------|------|------|
+| UNET (Q4 GGUF) | `diffusion_models/ltx-2.3-22b-distilled-1.1-UD-Q4_K_M.gguf` | 16.4GB | Video diffusion |
+| Text Encoder | Loaded by LTXVGemmaCLIPModelLoader | ~12GB | Gemma 3 12B |
+| VAE (full) | `vae/LTX23_video_vae_bf16.safetensors` | 1.45GB | Video VAE |
+| Text Projection | `text_encoders/ltx-2.3_text_projection_bf16.safetensors` | small | Projection |
+| Connectors | `text_encoders/ltx-2.3-connectors-textproj.safetensors` | small | Text-proj bridge |
+
+**VRAM**: ~20GB+ with all models loaded. Only fits on 24GB cards.
+
+---
+
+## LLM Setup
+
+| Provider | Model | VRAM | Speed | Notes |
+|----------|-------|------|-------|-------|
+| OpenRouter | deepseek-v4-pro | Zero | ~42s | Primary, API key needed |
+| ZAI | deepseek | Zero | ~392s | Fallback, slow |
+| llama.cpp | Qwen3.6-35B-A3B | 19GB | ~42s | Local, must stop for video |
+| Gemini | 2.5 Flash | Zero | ~5s | Vision only, free tier |
+
+---
+
+## VRAM Budget (RTX 4090, 24GB)
+
+| Stage | VRAM Used | llama.cpp Running? |
+|-------|-----------|-------------------|
+| A (Z-Image) | ~6GB | Yes (if needed for prompt) |
+| C (HY-Motion) | ~6GB | **NO — must stop** |
+| D (VNCCS Edit) | ~14GB | **NO — too tight** |
+| E (LTX Video) | ~20GB | **NO — won't fit** |
+| F (Post-process) | ~20GB | **NO** |

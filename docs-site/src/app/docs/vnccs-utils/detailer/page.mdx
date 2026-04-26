@@ -1,0 +1,26 @@
+# VNCCS Qwen Detailer — Change Emotion
+
+**Workflow**: `VNCCS_Utils QwenDetailer_ChangeEmotion.json`
+**Extension**: VNCCS-Utils
+**Category**: Character Editing
+
+---
+
+## What it does
+
+A focused tool for changing just the facial expression on an existing character image. Lighter weight than the full VNCCS Emotion Studio (Step 3).
+
+### Key Nodes
+
+| Node | Purpose |
+|------|---------|
+| **Qwen Detailer** | Focused facial edit using Qwen Image Edit |
+
+### Inputs
+| Input | Type | Description |
+|-------|------|-------------|
+| image | IMAGE | Source character image |
+| instruction | STRING | What emotion to apply ("change expression to happy") |
+
+### Use case
+Quick emotion changes without running the full VNCCS pipeline. Good for iteratively adjusting expressions.

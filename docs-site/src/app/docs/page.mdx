@@ -1,0 +1,95 @@
+# ComfyUI Pipeline Overview
+
+This is the single source of truth for understanding how all 26 workflows across 4 extensions fit together.
+
+---
+
+## The Full Pipeline
+
+Every character animation goes through these stages. **Each stage depends on the previous one** — garbage in means garbage out, and it compounds downstream.
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  STAGE A: Character Generation                                         │
+│  "What does the character look like?"                                   │
+│  Z-Image Turbo (768x1024) → character.png                              │
+│  Workflow: 00_z_image_character.json                                    │
+│  Extension: Pose Director                                               │
+├─────────────────────────────────────────┬───────────────────────────────┤
+│  STAGE B: Character Sheet (optional)    │  STAGE B': Clone (optional)  │
+│  "Multiple angles of the character"     │  "Recreate from a photo"      │
+│  VNCCS Char Sheet Generator             │  VNCCS Clone Character        │
+│  Workflows: VN_Step1*                   │  Workflow: VN_Step1.1*        │
+│  Extension: VNCCS                       │  Extension: VNCCS             │
+├─────────────────────────────────────────┴───────────────────────────────┤
+│  STAGE C: Pose & Motion                                                │
+│  "What does the character DO?"                                          │
+│  HY-Motion (text→3D motion) or MotionDirector (LLM→keyframes)          │
+│  Workflow: 01_hymotion_keyframes.json                                   │
+│  Extension: Pose Director / HY-Motion                                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│  STAGE D: Apply Pose to Character                                      │
+│  "Put the character IN those poses"                                     │
+│  VNCCS QWEN Edit (character + pose mesh → posed character)             │
+│  Workflows: 02_vnccs_edit_mesh.json, 03_motion_keyframes_*.json        │
+│  Extension: Pose Director                                               │
+├─────────────────────────────────────────────────────────────────────────┤
+│  STAGE E: Video Assembly                                               │
+│  "Animate between the keyframes"                                        │
+│  LTX Video 2.3 with keyframe guides                                    │
+│  Workflow: 04_ltx_video_assembly.json                                   │
+│  Extension: Pose Director                                               │
+├─────────────────────────────────────────────────────────────────────────┤
+│  STAGE F: Post-Processing (optional)                                   │
+│  "Fix artifacts, sharpen, clean up"                                     │
+│  LTX EditAnything IC-LoRA                                              │
+│  Workflow: 06_ltx_edit_anything_postprocess.json                        │
+│  Extension: Pose Director                                               │
+├─────────────────────────────────────────────────────────────────────────┤
+│  STAGE G: Lip Sync (not yet working)                                   │
+│  "Make the mouth move"                                                  │
+│  InfiniteTalk / Wan Video                                               │
+│  Workflow: 07_lip_sync.json                                             │
+│  Extension: Pose Director                                               │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+## Dependency Chain
+
+```
+character.png ──→ keyframes (3D mesh) ──→ edited_keyframes ──→ video.mp4
+  (Stage A)          (Stage C)              (Stage D)          (Stage E)
+      │                  │                      │                  │
+      │                  │                      │                  └→ post-processed.mp4
+      │                  │                      │                      (Stage F)
+      │                  │                      │
+      │                  │                      └→ Each keyframe is a VNCCS edit
+      │                  │                          (character + mesh → posed char)
+      │                  │
+      │                  └→ HY-Motion: trained DiT, ~11GB VRAM
+      │                     Must STOP llama.cpp first!
+      │
+      └→ Z-Image Turbo: 768x1024, 8 steps, CFG 1.0
+         No negative prompt needed (turbo mode)
+```
+
+**Critical**: Stage D (VNCCS edit) is the bottleneck. Each keyframe takes ~145s at 40 steps. A 4-keyframe animation = ~580s just for this stage.
+
+## Extension Breakdown
+
+| Extension | Workflows | Purpose |
+|-----------|-----------|---------|
+| **Pose Director** | 9 | Our pipeline stages (A through G) |
+| **VNCCS** | 7 main | Character creation, clothes, emotion, sprites |
+| **VNCCS-Utils** | 4 | Pose Studio, camera control, detailer, model loader |
+| **HY-Motion** | 5 | Text-to-3D motion generation (5 export variants) |
+
+## Where Workflows Live
+
+| Location | Contents |
+|----------|----------|
+| `comfyui-pose-director/workflows/` | Our pipeline stages (00-07) |
+| `custom_nodes/vnccs/workflows/` | VNCCS Step 1-5 workflows |
+| `custom_nodes/vnccs-utils/workflows/` | Pose Studio, camera, detailer |
+| `custom_nodes/ComfyUI-HY-Motion1/workflows/` | HY-Motion variants |
+| `comfyui/Workflows/apps/` | Generated .app.json files (App Builder) |

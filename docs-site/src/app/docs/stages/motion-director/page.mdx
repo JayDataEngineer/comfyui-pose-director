@@ -1,0 +1,41 @@
+# MotionDirector — LLM-Driven Keyframe Generation
+
+**Workflow**: Part of `01_hymotion_keyframes.json` (alternative to HY-Motion)
+**Extension**: Pose Director
+**Status**: Superseded by HY-Motion for Stage C, but still available
+
+---
+
+## What it does
+
+Uses an LLM (Qwen3.6-35B-A3B via llama.cpp, or any OpenAI-compatible API) to generate joint rotation keyframes from a text description. The LLM outputs rotation angles for each joint, which are then rendered via Anny 3D body mesh.
+
+### How it differs from HY-Motion
+
+| Aspect | MotionDirector | HY-Motion |
+|--------|---------------|-----------|
+| Method | LLM text → joint angles (guessing) | Trained DiT diffusion (learned) |
+| Quality | Variable, depends on LLM | Consistent, trained on motion data |
+| VRAM | Zero (uses external LLM) | ~11GB (model on GPU) |
+| Speed | ~42s (OpenRouter) | ~60s |
+| Output | Joint rotations + mesh renders | Motion data + preview |
+
+### Key Parameters
+
+| Param | Type | Description |
+|-------|------|-------------|
+| motion_description | STRING | "wave hello with right hand" |
+| num_keyframes | INT | How many poses to generate |
+| total_frames | INT | Total animation length |
+| vision_feedback_rounds | INT | Number of self-correction cycles (0=disabled) |
+
+### Vision Feedback Loop
+When `vision_feedback_rounds > 0`, the LLM evaluates its own output:
+1. Generate keyframes from text
+2. Render body mesh previews
+3. Gemini Flash vision model evaluates pose quality
+4. Corrections sent back to LLM for self-correction
+5. Repeat N times
+
+### Downstream
+Same as HY-Motion: rotations JSON → Anny body mesh → VNCCS edit (Stage D)

@@ -1,0 +1,43 @@
+# Stage F: Post-Processing & Stage G: Lip Sync
+
+---
+
+## Stage F: LTX EditAnything Post-Processing
+
+**Workflow**: `06_ltx_edit_anything_postprocess.json`
+**Extension**: Pose Director + LTXVideo
+
+### What it does
+Uses LTX EditAnything with an IC-LoRA to fix artifacts in the generated video. Removes hallucinated text, smooths transitions, cleans backgrounds.
+
+### Key Nodes
+
+| Node | Purpose |
+|------|---------|
+| **LTXICLoRALoaderModelOnly** | Loads the EditAnything IC-LoRA onto the model |
+| **LTXAddVideoICLoRAGuide** | Injects the edit guide at specific frames |
+
+### When to use
+- Hallucinated text on buildings/signs
+- Background warping near character
+- Minor temporal inconsistencies
+
+### When NOT to use
+- Fundamental motion problems (fix Stage D instead)
+- Major anatomical errors (fix Stage A instead)
+
+---
+
+## Stage G: Lip Sync (Placeholder)
+
+**Workflow**: `07_lip_sync.json`
+**Extension**: Pose Director
+
+### Status
+Not yet implemented. Placeholder workflow for InfiniteTalk or Wan Video-based lip sync.
+
+### Planned flow
+1. Input: video from Stage E/F + audio file
+2. Extract audio features
+3. Generate mouth movement keyframes
+4. Apply to video via image-to-video editing

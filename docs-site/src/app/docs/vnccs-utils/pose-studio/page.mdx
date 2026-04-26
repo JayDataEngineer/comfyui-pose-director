@@ -1,0 +1,31 @@
+# VNCCS Pose Studio
+
+**Workflow**: `VNCCS_Utils Pose Studio.json`
+**Extension**: VNCCS-Utils
+**Category**: Pose & Motion
+
+---
+
+## What it does
+
+Interactive pose editor for creating OpenPose skeletons visually. You can manipulate individual joints to create custom poses, then use those poses as input for VNCCS character editing.
+
+### Key Nodes
+
+| Node | Purpose |
+|------|---------|
+| **Pose Studio** | Interactive UI for editing OpenPose keypoints |
+| **VNCCS_Pipe** | Renders the character in the edited pose |
+
+### Use case
+1. Load a character image
+2. Use Pose Studio to create/adjust a skeleton pose
+3. VNCCS renders the character in that pose
+
+This is the **visual alternative** to MotionDirector's text-based pose generation. Instead of describing the pose in text, you drag joints around.
+
+### Output
+A character image in the specified pose.
+
+### Downstream
+Pose Studio output can feed directly into the Pose Director pipeline at Stage D, or be used standalone for single-pose character images.

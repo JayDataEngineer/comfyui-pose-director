@@ -1,0 +1,54 @@
+# VNCCS Visual Camera Control
+
+**Workflow**: `VNCCS_Utils Visual camera control node for Qwen-Image-Edit-2511-Multiple-Angles LoRa.json`
+**Extension**: VNCCS-Utils
+**Category**: Character Editing
+
+---
+
+## What it does
+
+Re-renders an image from a different camera angle. Not free-text — uses structured JSON camera parameters with a specialized Multiple Angles LoRA.
+
+### How it works
+
+```
+Input Image + Camera JSON → Qwen Image Edit 2511 + Angles LoRA → New View
+```
+
+The `VNCCS_VisualPositionControl` node converts camera parameters into a prompt that the LoRA understands.
+
+### Camera Parameters
+
+```json
+{
+  "azimuth": 45,
+  "elevation": 0,
+  "distance": "medium shot",
+  "include_trigger": true
+}
+```
+
+| Param | Type | Range | Description |
+|-------|------|-------|-------------|
+| azimuth | INT | 0-360 | Horizontal angle (0=front, 90=right, 180=back, 270=left) |
+| elevation | INT | -90 to 90 | Vertical angle (0=eye level, 90=top-down) |
+| distance | STRING | — | Shot framing ("close up", "medium shot", "full shot") |
+| include_trigger | BOOL | — | Whether to include the LoRA trigger word |
+
+### Special Requirements
+- **LoRA**: `qwen-image-edit-2511-multiple-angles-lora.safetensors` — specifically trained for viewpoint changes
+- This LoRA is loaded via `LoraLoaderModelOnly` node
+
+### Outputs
+Two images from different camera angles (the workflow has two branches running in parallel).
+
+### Use case
+- Generate turnaround sheets from a single character image
+- See a scene from multiple angles without regenerating
+- Create reference views for 3D modeling
+
+### Limitations
+- Works best with simple backgrounds (kitchens, rooms)
+- Extreme angle changes (>180 degrees) may hallucinate unseen content
+- The LoRA was trained on specific viewpoint ranges

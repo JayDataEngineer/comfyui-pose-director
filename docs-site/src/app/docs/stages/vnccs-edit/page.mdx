@@ -1,0 +1,76 @@
+# Stage D: VNCCS Edit — Apply Pose to Character
+
+**Workflows**:
+- `02_vnccs_edit_keyframe.json` — single keyframe edit
+- `02_vnccs_edit_mesh.json` — single keyframe with body mesh
+- `03_motion_keyframes_qwen_edit_mesh.json` — batch multi-keyframe
+
+**Extension**: Pose Director
+
+---
+
+## What it does
+
+This is the core of character consistency. Takes a character image + a pose mesh, and edits the character INTO that pose using VNCCS reference latent injection.
+
+### The VNCCS Pattern (Critical)
+
+VNCCS does NOT use ControlNet. It uses **reference latents**:
+
+```
+character.png ──→ VAE Encode → reference_latent_1
+pose_mesh.png ──→ VAE Encode → reference_latent_2
+
+During sampling at timestep zero:
+  latent += weight1² × reference_latent_1
+  latent += weight2² × reference_latent_2
+```
+
+The quadratic weighting (`weight²`) means small changes in weight have outsized effects. The injection happens at **timestep zero** — the very start of the denoising process.
+
+### Pipeline Flow
+
+```
+LoadImage (character.png)     ──→ VNCCS_QWEN_Encoder.image1
+LoadImage (keyframe_mesh.png) ──→ VNCCS_QWEN_Encoder.image2
+
+UnetLoaderGGUF (Qwen-Image-Edit-2511) → Model
+CLIPLoader (qwen_2.5_vl_7b)          → CLIP
+VAELoader (qwen_image_vae)            → VAE
+
+VNCCS_QWEN_Encoder:
+  - instruction: "repose the character to match the body shape and pose"
+  - weight1: 1.0 (character reference)
+  - weight2: 1.0 (pose reference)
+  - target_size: 1024
+  → Edited IMAGE
+```
+
+### Key Parameters
+
+| Param | Type | Default | What it does |
+|-------|------|---------|-------------|
+| instruction | STRING | — | The edit instruction. Must mention body shape AND pose |
+| weight1 | FLOAT | 1.0 | Character reference strength. Lower = character drifts |
+| weight2 | FLOAT | 1.0 | Pose reference strength. Lower = pose not followed |
+| target_size | INT | 1024 | Output resolution |
+| qwen_2511 | COMBO | — | Qwen model variant |
+
+### Multi-keyframe workflow (`03_motion_keyframes_qwen_edit_mesh.json`)
+
+For animations with N keyframes, this workflow:
+1. Splits the keyframe batch into individual images
+2. Runs VNCCS edit for each keyframe separately
+3. Collects all outputs as a batch for Stage E
+
+**Runtime**: ~145s per keyframe at 40 steps. 4 keyframes = ~580s.
+
+### Failure modes & fixes
+
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| Character drifts between frames | weight1 too low | Increase to 1.2-1.5 |
+| Pose not followed | weight2 too low | Increase to 1.2-1.5 |
+| Background warping | Edit bleeding outside character | Use larger canvas or add padding |
+| Facial distortion | Not enough steps | Increase from 30 to 40 |
+| Hands disappear | COCO-18 has no hand keypoints | Add hand detector or switch to DWPose |

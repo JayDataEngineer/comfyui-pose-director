@@ -1,0 +1,36 @@
+# VNCCS Clothes Generator & Changer
+
+**Workflows**: `VN_Step2_QWEN_ClothesGenerator_v1.json`, `VN_Step2_ClothesChanger_v5.json`
+**Extension**: VNCCS
+**Category**: Character Editing
+
+---
+
+## What it does
+
+Takes a character sheet (from Step 1) and either:
+- **Generator**: Creates new clothing based on a text description
+- **Changer**: Swaps the character's outfit while preserving their appearance
+
+Both use VNCCS reference latent injection to maintain character consistency.
+
+### Key Nodes
+
+| Node | Count | Purpose |
+|------|-------|---------|
+| **VNCCS_Pipe** | Multiple (6-8) | Each controls a different generation pass (front, back, detail shots) |
+| **VNCCS_Resize** | Multiple | Upscales each output |
+| **SaveImage** | 5 | Saves different angles/views separately |
+
+### How it works
+The clothes changer uses multiple VNCCS_Pipe passes in sequence:
+1. First pass generates the basic clothing change
+2. Subsequent passes refine details (face preservation, texture, seams)
+3. Each pass uses the previous output + original character as reference
+
+### Dependencies
+- **Input**: Character sheet from Step 1 (character image)
+- **Models**: Same as Step 1 (Qwen Image Edit 2511 + CLIP + VAE)
+
+### Downstream
+Edited characters feed into **Emotion Studio** (Step 3) for facial expression changes, or directly into the Pose Director pipeline at Stage D.

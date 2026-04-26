@@ -1,0 +1,31 @@
+# Stage G: Lip Sync
+
+**Workflow**: `07_lip_sync.json`
+**Extension**: Pose Director
+**Status**: Placeholder — not yet working
+
+---
+
+## What it will do
+
+Take the generated video (from Stage E/F) and an audio file, then animate the character's mouth to match the speech.
+
+### Planned Architecture
+
+```
+Input Video + Audio
+       ↓
+WanAudioEncoder (audio → features)
+       ↓
+WanImageToVideo (video + audio features → lip-synced video)
+       ↓
+Output: Video with mouth movements matching audio
+```
+
+### Models Needed
+- Wan 2.2 video model (not yet downloaded)
+- Audio encoder from Wan toolkit
+- CLIP Vision for face reference
+
+### Current state
+The workflow JSON exists with placeholder nodes but has not been tested. InfiniteTalk was the original plan but needs its own CUDA environment (conflicts with ComfyUI's PyTorch).

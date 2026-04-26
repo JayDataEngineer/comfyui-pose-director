@@ -30,18 +30,21 @@ def render_mesh_pyrender(
     import trimesh
     import pyrender
 
-    # Center and scale mesh to fit viewport with even padding
-    # Use bounding box center (not mean) so head/feet get equal headroom
+    # Center and scale mesh to fit viewport with headroom above
     bbox_min = vertices.min(axis=0)
     bbox_max = vertices.max(axis=0)
     bbox_center = (bbox_min + bbox_max) / 2
     verts_centered = vertices - bbox_center
 
-    # Scale so the largest projected extent fits with padding
-    proj_max = max(np.abs(verts_centered[:, 0]).max(), np.abs(verts_centered[:, 2]).max())
-    if proj_max > 0:
-        scale = 1.6 / proj_max  # fit within [-0.8, 0.8], leaves 33% padding
-        verts_centered = verts_centered * scale
+    # Scale based on vertical (Z) extent to prevent head clipping
+    z_max = np.abs(verts_centered[:, 2]).max()
+    x_max = np.abs(verts_centered[:, 0]).max()
+    # Use the larger of half-height (with headroom) or half-width
+    scale_extent = max(z_max * 1.4, x_max * 1.1)
+    if scale_extent > 0:
+        verts_centered = verts_centered * (1.0 / scale_extent)
+    # Shift mesh down slightly so head has extra room
+    verts_centered[:, 2] -= 0.05
 
     mesh = trimesh.Trimesh(vertices=verts_centered, faces=faces)
     mesh.visual = trimesh.visual.ColorVisuals(
@@ -111,15 +114,17 @@ def render_mesh_pil(
     """
     from PIL import Image, ImageDraw
 
-    # Center and scale — use bounding box center for even padding
+    # Center and scale — bounding box center, extra headroom
     bbox_min = vertices.min(axis=0)
     bbox_max = vertices.max(axis=0)
     bbox_center = (bbox_min + bbox_max) / 2
     verts = vertices - bbox_center
-    # Projected extents: X→screen_x, Z→screen_y (Anny is Z-up)
-    proj_max = max(np.abs(verts[:, 0]).max(), np.abs(verts[:, 2]).max())
-    if proj_max > 0:
-        verts = verts * (0.8 / proj_max)
+    z_max = np.abs(verts[:, 2]).max()
+    x_max = np.abs(verts[:, 0]).max()
+    scale_extent = max(z_max * 1.4, x_max * 1.1)
+    if scale_extent > 0:
+        verts = verts * (1.0 / scale_extent)
+    verts[:, 2] -= 0.05
 
     # Orthographic projection: use X and -Z (screen coords)
     # Anny's up axis is Z, not Y — so project X→screen_x, Z→screen_y

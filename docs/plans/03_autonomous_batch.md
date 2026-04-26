@@ -125,6 +125,12 @@ provide their own character art and still use the batch pipeline for animation.
 - `pipeline/comfyui_client.py` — ComfyUI API submission
 - `pipeline/ui_to_api.py` — workflow conversion
 - `.env` with API keys
+- **ComfyCozy MCP server** — 114 tools for autonomous ComfyUI control
+  - The agent should use MCP tools: `load_workflow`, `execute_workflow`, `analyze_image`
+  - Vision evaluation via `analyze_image` (quality scores, artifact detection)
+  - Workflow patching via `apply_workflow_patch`, `set_input`
+  - Progress tracking via `execute_with_progress`
+  - This gives the agent full ComfyUI control without wrapping the API separately
 
 ### What Needs Building
 - Stage-level retry loop with parameter adjustment

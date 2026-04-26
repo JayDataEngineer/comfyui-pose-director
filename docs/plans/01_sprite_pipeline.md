@@ -275,9 +275,9 @@ func _process(delta):
 5. ~~Background removal for transparent sprites~~ (done — rembg u2net, --remove-bg flag)
 
 ### Phase 2: Sprite Assembly & Godot
-1. Metadata JSON → Godot .tres converter
-2. Sprite3D controller script
-3. Direction-aware billboard system
+1. ~~Metadata JSON → Godot .tres converter~~ (done — export_godot.py)
+2. ~~Sprite3D controller script~~ (done — CharacterSprite3D GDScript)
+3. ~~Direction-aware billboard system~~ (done — mirror support, direction switching)
 
 ### Phase 3: Cutscene System
 1. Select animations for LTX cutscene upgrade

@@ -119,9 +119,6 @@ class MotionMeshRenderer:
             # Swap Y↔Z so Y becomes depth and Z becomes height.
             vertices = vertices[:, [0, 2, 1]]
 
-            # Scale down to add headroom — prevents head clipping
-            vertices = vertices * 0.75
-
             # Render to 2D image
             image = render_mesh(vertices, faces, width, height)
             rendered_frames.append(image)

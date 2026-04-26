@@ -30,12 +30,17 @@ def render_mesh_pyrender(
     import trimesh
     import pyrender
 
-    # Center and scale mesh to fit viewport
-    # Anny is Z-up, so project onto XZ plane for viewport sizing
-    verts_centered = vertices - vertices.mean(axis=0)
+    # Center and scale mesh to fit viewport with even padding
+    # Use bounding box center (not mean) so head/feet get equal headroom
+    bbox_min = vertices.min(axis=0)
+    bbox_max = vertices.max(axis=0)
+    bbox_center = (bbox_min + bbox_max) / 2
+    verts_centered = vertices - bbox_center
+
+    # Scale so the largest projected extent fits with padding
     proj_max = max(np.abs(verts_centered[:, 0]).max(), np.abs(verts_centered[:, 2]).max())
     if proj_max > 0:
-        scale = 1.8 / proj_max  # fit within [-0.9, 0.9]
+        scale = 1.6 / proj_max  # fit within [-0.8, 0.8], leaves 33% padding
         verts_centered = verts_centered * scale
 
     mesh = trimesh.Trimesh(vertices=verts_centered, faces=faces)
@@ -106,12 +111,15 @@ def render_mesh_pil(
     """
     from PIL import Image, ImageDraw
 
-    # Center and scale — only use projected axes (X, Z) for viewport fitting
-    verts = vertices - vertices.mean(axis=0)
+    # Center and scale — use bounding box center for even padding
+    bbox_min = vertices.min(axis=0)
+    bbox_max = vertices.max(axis=0)
+    bbox_center = (bbox_min + bbox_max) / 2
+    verts = vertices - bbox_center
     # Projected extents: X→screen_x, Z→screen_y (Anny is Z-up)
     proj_max = max(np.abs(verts[:, 0]).max(), np.abs(verts[:, 2]).max())
     if proj_max > 0:
-        verts = verts * (0.9 / proj_max)
+        verts = verts * (0.8 / proj_max)
 
     # Orthographic projection: use X and -Z (screen coords)
     # Anny's up axis is Z, not Y — so project X→screen_x, Z→screen_y

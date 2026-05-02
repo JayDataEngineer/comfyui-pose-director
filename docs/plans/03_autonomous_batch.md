@@ -2,6 +2,25 @@
 
 ## Status: Implemented
 
+## Ray Integration
+
+The batch pipeline supports running through the Tech Noir Ray infrastructure
+(`~/Documents/programs/ray/`), enabling cloud access instead of local-only.
+
+```bash
+# Local mode (default): talks directly to ComfyUI
+python scripts/run_autonomous_batch.py --npcs npcs/example_npcs.yaml
+
+# Ray mode: talks to Ray gateway proxy
+COMFYUI_URL=http://localhost:8000/comfyui python scripts/run_autonomous_batch.py --npcs npcs/example_npcs.yaml
+
+# Remote Ray: from any machine with network access
+COMFYUI_URL=https://your-ray-host:8000/comfyui python scripts/run_autonomous_batch.py --npcs npcs/example_npcs.yaml
+```
+
+The `pipeline/comfyui_client.py` module reads `COMFYUI_URL` from env var.
+All scripts that import it automatically support both modes.
+
 ## Concept
 
 A vLLM agent orchestrates the entire pipeline autonomously for batch NPC generation.

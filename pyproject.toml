@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 license = "MIT"
 dependencies = [
     "openai>=1.0",
+    "rembg[gpu]>=2.0.75",
 ]
 
 [project.optional-dependencies]

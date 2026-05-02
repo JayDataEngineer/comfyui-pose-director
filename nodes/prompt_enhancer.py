@@ -1,4 +1,7 @@
-"""PromptEnhancer — Enhances text prompts for Z-Image generation using an LLM."""
+"""PromptEnhancer — Enhances text prompts for Z-Image generation using an LLM.
+
+Auto-synced to remote Ray cluster via GitHub Actions.
+"""
 
 from ..utils.api_client import call_llm
 

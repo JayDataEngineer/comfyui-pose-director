@@ -1,0 +1,56 @@
+name: Sync to Ray Cluster
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
+
+      - name: Sync to remote
+        run: |
+          # Pull repo on remote
+          ssh -o StrictHostKeyChecking=no user@cloud '\
+            mkdir -p ~/repos/comfyui-pose-director && \
+            cd ~/repos/comfyui-pose-director && \
+            git init -b master 2>/dev/null; \
+            git remote add origin https://github.com/${{ github.repository }}.git 2>/dev/null || true && \
+            git fetch origin && \
+            git reset --hard origin/master'
+
+          # Rsync only Python/package files into ComfyUI custom_nodes
+          ssh -o StrictHostKeyChecking=no user@cloud '\
+            mkdir -p ${{ secrets.SYNC_TARGET }}/comfyui-pose-director && \
+            rsync -av --delete \
+              --exclude="__pycache__" \
+              --exclude=".venv" \
+              --exclude=".git" \
+              --exclude="output" \
+              --exclude=".env" \
+              --exclude=".claude" \
+              --exclude=".github" \
+              --exclude=".mcp.json" \
+              --exclude="docs" \
+              --exclude="docs-site" \
+              --exclude="tests" \
+              --exclude="scripts" \
+              --exclude="npcs" \
+              --exclude="poses" \
+              --exclude="conv*.txt" \
+              --exclude="PROGRESS.md" \
+              --exclude="CONV.txt" \
+              ~/repos/comfyui-pose-director/ \
+              ${{ secrets.SYNC_TARGET }}/comfyui-pose-director/'
+
+          # Restart ComfyUI to pick up changes (kill || true since process may not exist)
+          ssh -o StrictHostKeyChecking=no user@cloud '\
+            pgrep -f "main.py.*18465" | xargs -r kill 2>/dev/null; \
+            echo "ComfyUI restart triggered"' || true
+
+          echo "Sync complete"

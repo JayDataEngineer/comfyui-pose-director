@@ -190,6 +190,17 @@ NODE_SCHEMAS: dict[str, list[str]] = {
         "instruction",
         "qwen_2511",
     ],
+    "VNCCS_RMBG2": [
+        "image",
+        "model",
+        "sensitivity",
+        "process_res",
+        "mask_blur",
+        "mask_offset",
+        "invert_output",
+        "refine_foreground",
+        "background",
+    ],
 }
 
 # Widget indices that are UI-only and should be skipped during API conversion.

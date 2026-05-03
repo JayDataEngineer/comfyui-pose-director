@@ -1,6 +1,6 @@
 # Pose Director: Asset Generation Handoff
 
-This document explains how to generate 2D game sprite assets using the Pose Director extension on the Tech Noir Ray cluster. It is written for an AI agent that will programmatically create character sprites.
+This document explains how to generate 2D game sprite assets using the Pose Director extension on the Tech Noir Ray cluster. Written for an AI agent that will programmatically create character sprites.
 
 ## Architecture
 
@@ -8,17 +8,18 @@ This document explains how to generate 2D game sprite assets using the Pose Dire
 ComfyUI (port 18465) → Ray Serve proxy (port 18800) → Tailscale network
 ```
 
-All API calls go through the Ray Serve proxy at `http://100.86.69.57:18800/comfyui`.
+All API calls go through: `http://100.86.69.57:18800/comfyui`
 
-## Prerequisites
+## CRITICAL: Do Not Rebuild The Workflow
 
-- On the Tailscale network (or running on the Ray cluster itself)
-- The Ray cluster is running: `http://100.86.69.57:18800/comfyui/system_stats` returns 200
-- Model files are pre-loaded on the remote (GGUF, CLIP, VAE, LoRA)
+**Do NOT construct the workflow JSON from scratch.** A previous attempt to do this produced completely wrong results — different characters per frame, no consistency, hallucinated backgrounds. The VNCCS encoder is sensitive to exact parameter values.
 
-## Pipeline: Character → Posed Sprite
+**Use one of these two approaches:**
 
-The sprite pipeline takes a character image and a pose specification, then outputs a posed character sprite.
+1. **Best**: Use the Python pipeline module (see below) — it loads the tested workflow JSON and patches only the fields that change.
+2. **OK**: Copy the exact workflow JSON below and change ONLY the 4 marked fields. Do not touch anything else.
+
+## Pipeline: Character → Posed Sprite (Transparent Background)
 
 ```
 Character Image (768x1024 PNG)
@@ -31,7 +32,9 @@ VNCCS_QWEN_Encoder (character + mesh + skeleton → conditioned latents)
         ↓
 KSampler (4-step Lightning diffusion)
         ↓
-VAEDecode → SaveImage (1024x1024 PNG output)
+VAEDecode → VNCCS_RMBG2 (background removal, transparent output)
+        ↓
+SaveImage (1024x1024 RGBA PNG output)
 ```
 
 ### Step 1: Upload Character Image
@@ -47,17 +50,18 @@ Response: `{"name": "PoseDirector/character.png", "subfolder": "PoseDirector", "
 
 ### Step 2: Submit Workflow
 
-POST the workflow JSON below to `http://100.86.69.57:18800/comfyui/prompt`.
+POST the workflow JSON to `http://100.86.69.57:18800/comfyui/prompt`.
 
-You must change:
-- **Node 1 `image`**: set to the uploaded filename (e.g. `"PoseDirector/character.png"`)
-- **Node 2 `rotations_json`**: the pose to render (see Pose Reference below)
-- **Node 2 `model_rotation_y`**: viewing angle (0=front, 90=right, 180=back, 270=left)
-- **Node 10 `seed`**: change for variations, keep same for reproducibility
+**Change ONLY these 4 fields:**
 
-### Working Workflow JSON
+| Field | Location | What to set |
+|-------|----------|-------------|
+| `image` | Node 1 (LoadImage) | Uploaded filename, e.g. `"PoseDirector/character.png"` |
+| `rotations_json` | Node 2 (BodyMeshRenderer) | Pose JSON string (see Pose Reference below) |
+| `model_rotation_y` | Node 2 (BodyMeshRenderer) | Viewing angle: 0=front, 90=right, 180=back, 270=left |
+| `seed` | Node 10 (KSampler) | Change for variations, same for reproducibility |
 
-This is the exact API-format JSON that has been tested and produces output:
+### Working Workflow JSON (with background removal)
 
 ```json
 {
@@ -170,15 +174,40 @@ This is the exact API-format JSON that has been tested and produces output:
       "vae": ["6", 0]
     }
   },
+  "13": {
+    "class_type": "VNCCS_RMBG2",
+    "inputs": {
+      "image": ["11", 0],
+      "model": "BEN2",
+      "sensitivity": 1.0,
+      "process_res": 1024,
+      "mask_blur": 4,
+      "mask_offset": 0,
+      "invert_output": false,
+      "refine_foreground": true,
+      "background": "Alpha"
+    }
+  },
   "12": {
     "class_type": "SaveImage",
     "inputs": {
-      "images": ["11", 0],
+      "images": ["13", 0],
       "filename_prefix": "PoseDirector/sprite"
     }
   }
 }
 ```
+
+### What NOT to change
+
+These parameters are critical for VNCCS consistency. Changing them will produce wrong results:
+
+- **Node 9 image ordering**: image1=mesh (node 2), image2=character (node 1), image3=openpose (node 3). VNCCS reads image2 as the character reference.
+- **Node 9 instruction**: The text tells VNCCS which picture is what. If image1/image2 are swapped without changing the instruction, you get a different character.
+- **Node 9 qwen_2511**: Must be `true`. Without it, VNCCS uses the old encoder which has worse consistency.
+- **Nodes 7-8 LoRAs**: Both Lightning 4-step and VNCCS PoseStudio LoRAs are required. Missing either produces garbage.
+- **Node 10 steps**: Must be 4 with the Lightning LoRA. More steps = worse results, not better.
+- **Node 13 VNCCS_RMBG2**: BEN2 model with Alpha background for transparent output.
 
 ### Step 3: Poll for Completion
 
@@ -187,14 +216,12 @@ This is the exact API-format JSON that has been tested and produces output:
 curl http://100.86.69.57:18800/comfyui/history/{prompt_id}
 ```
 
-When `status.completed` is true, check `outputs` for image filenames.
+When `status.completed` is true, check `outputs` for image filenames. Each frame takes ~30 seconds.
 
 ### Step 4: Download Output
 
 ```bash
-curl http://100.86.69.57:18800/comfyui/view \
-  -d "filename=PoseDirector_sprite_01.png" \
-  -d "type=output" \
+curl "http://100.86.69.57:18800/comfyui/view?filename=PoseDirector_sprite_01.png&type=output" \
   -o sprite.png
 ```
 
@@ -260,17 +287,28 @@ Joints use Euler angles in degrees `[x, y, z]` from rest pose. BodyMeshRenderer 
 | 45 | Front-right |
 | 315 | Front-left |
 
-## Python Usage
+## Animation Frame Strategy
 
-For programmatic batch generation, use the pipeline module:
+For animation sequences (walk, idle, attack), generate one frame per pose at a time. Each frame is an independent workflow execution with a different `rotations_json`.
+
+**Consistency between frames**: Use the same `seed` for all frames in an animation. The VNCCS reference latents are deterministic given the same character image, so the same seed produces the most consistent rendering across frames.
+
+**Frame ordering**: For a walk cycle, define 4-8 keyframe poses and generate them sequentially. The evenly-spread approach works for looping animations.
+
+## Python Usage (Recommended)
+
+The pipeline module loads the tested workflow JSON and patches only what changes — no risk of misconfiguration:
 
 ```python
-import requests, json, time
+import requests, json, time, sys
 
 COMFYUI = "http://100.86.69.57:18800/comfyui"
 
+# Import the pipeline module from the comfyui-pose-director project
+sys.path.insert(0, "/path/to/comfyui-pose-director")
+from pipeline.ui_to_api import load_ui_workflow, patch_ui_workflow, convert_ui_to_api
+
 def upload_image(image_path: str, name: str) -> str:
-    """Upload an image and return the ComfyUI filename."""
     resp = requests.post(f"{COMFYUI}/upload/image",
         files={"image": (name, open(image_path, "rb"), "image/png")},
         data={"subfolder": "PoseDirector", "overwrite": "true"})
@@ -278,12 +316,7 @@ def upload_image(image_path: str, name: str) -> str:
 
 def generate_sprite(character_image: str, pose: dict, direction: float = 0.0,
                     seed: int = 42, prefix: str = "sprite") -> str:
-    """Generate a posed sprite. Returns the output filename."""
-    # Load the workflow template and modify it
-    import sys, os
-    sys.path.insert(0, "/path/to/comfyui-pose-director")
-    from pipeline.ui_to_api import load_ui_workflow, patch_ui_workflow, convert_ui_to_api
-
+    """Generate a posed sprite with transparent background."""
     wf = load_ui_workflow("workflows/05_sprite_bodymesh_edit.json")
     patch_ui_workflow(wf, {
         "LoadImage": {"image": character_image},
@@ -296,24 +329,21 @@ def generate_sprite(character_image: str, pose: dict, direction: float = 0.0,
     })
     api = convert_ui_to_api(wf)
 
-    # Submit
     resp = requests.post(f"{COMFYUI}/prompt", json={"prompt": api}, timeout=60)
     prompt_id = resp.json()["prompt_id"]
 
-    # Poll until done
     while True:
-        time.sleep(2)
+        time.sleep(3)
         hist = requests.get(f"{COMFYUI}/history/{prompt_id}").json()
         if prompt_id in hist and hist[prompt_id].get("status", {}).get("completed"):
             break
 
-    # Extract output filename
     for nid, out in hist[prompt_id]["outputs"].items():
         for img in out.get("images", []):
             return img["filename"]
     raise RuntimeError("No output images produced")
 
-# Example: generate 4-direction idle sprite sheet
+# Example: 4-direction idle sprite sheet
 character = upload_image("luna.png", "luna.png")
 idle_pose = {"right_shoulder": [0, 0, -20], "left_shoulder": [0, 0, 20]}
 
@@ -324,8 +354,6 @@ for direction, label in [(0, "front"), (90, "right"), (180, "back"), (270, "left
 
 ## Batch Generation with CLI Scripts
 
-For larger batches, use the built-in scripts:
-
 ```bash
 # Generate sprite sheet for one animation in all 4 directions
 uv run python scripts/run_sprite_batch.py \
@@ -334,12 +362,12 @@ uv run python scripts/run_sprite_batch.py \
     --directions front right back left \
     --seed 42
 
-# Remove backgrounds for transparent sprites
+# Backgrounds are now removed in the workflow (VNCCS_RMBG2)
+# The --remove-bg flag still works as a fallback via Python rembg
 uv run python scripts/run_sprite_batch.py \
     --character luna.png \
     --animations idle wave combat \
-    --directions front right back left \
-    --remove-bg
+    --directions front right back left
 
 # Export to Godot project
 uv run python scripts/export_godot.py manifest.json \
@@ -352,11 +380,13 @@ uv run python scripts/export_godot.py manifest.json \
 
 | Issue | Cause | Fix |
 |-------|-------|-----|
+| Different character per frame | Wrong image ordering in VNCCS | Use the exact JSON above — image1=mesh, image2=character |
+| No transparency | Missing VNCCS_RMBG2 node | Verify node 13 is in the workflow |
+| Hallucinated backgrounds | Wrong VNCCS instruction | Use the exact instruction text from the JSON |
 | "No Qwen-Image-Edit GGUF" | Model file missing | Check `unet/` dir for GGUF file |
-| "Invalid image file" | Upload failed or corrupt image | Re-upload the character PNG |
-| Timeout after 300s | GPU overloaded or model loading | Wait, retry. Cold start takes ~5 min |
+| "Invalid image file" | Upload failed | Re-upload the character PNG |
+| Timeout after 300s | GPU loading models | Cold start takes ~5 min, retry |
 | Blank output | BodyMeshRenderer returned empty | Check `rotations_json` is valid JSON |
-| Pose looks wrong | Wrong axis mapping | See Pose Reference table above |
 
 ## Model Files Required
 

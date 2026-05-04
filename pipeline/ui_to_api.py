@@ -157,6 +157,8 @@ NODE_SCHEMAS: dict[str, list[str]] = {
         "video_format",
         "backend",
     ],
+    # Alias targets (aliased from sanitized node types)
+    "ReplaceText": ["text", "find", "replace"],
     # HY-Motion (Tencent Hunyuan text-to-motion)
     "HYMotionLoadLLM": ["model_name", "quantization", "offload_to_cpu"],
     "HYMotionLoadLLMGGUF": ["gguf_file"],
@@ -203,7 +205,6 @@ NODE_SCHEMAS: dict[str, list[str]] = {
     ],
 }
 
-# Widget indices that are UI-only and should be skipped during API conversion.
 # Format: node_type -> {widget_index: ignored_name}
 UI_ONLY_WIDGETS: dict[str, dict[int, str]] = {
     "KSampler": {1: "control_after_generate"},
@@ -232,7 +233,20 @@ def _build_link_map(links: list[list]) -> dict[int, tuple[int, int]]:
 def _convert_generic(node: dict, link_map: dict[int, tuple[int, int]]) -> dict:
     """Convert a single UI node to API format using the embedded schema."""
     node_type = node.get("type", "")
-    schema = NODE_SCHEMAS.get(node_type, [])
+
+    if node_type in NODE_SCHEMAS:
+        return _convert_with_schema(node, link_map)
+    return _convert_from_ui(node, link_map)
+
+
+# Widget types: these have entries in widgets_values even when linked.
+WIDGET_TYPES = {"INT", "FLOAT", "STRING", "BOOLEAN", "COMBO"}
+
+
+def _convert_with_schema(node: dict, link_map: dict[int, tuple[int, int]]) -> dict:
+    """Convert using the hardcoded NODE_SCHEMAS entry."""
+    node_type = node.get("type", "")
+    schema = NODE_SCHEMAS[node_type]
     ui_only = UI_ONLY_WIDGETS.get(node_type, {})
     defaults = NODE_DEFAULTS.get(node_type, {})
 
@@ -249,9 +263,15 @@ def _convert_generic(node: dict, link_map: dict[int, tuple[int, int]]) -> dict:
 
         if input_name in ui_inputs:
             ui_inp = ui_inputs[input_name]
+            inp_type = ui_inp.get("type", "")
+            is_widget_type = inp_type in WIDGET_TYPES
+
             if ui_inp.get("link") is not None:
                 src_id, src_out = link_map[ui_inp["link"]]
                 inputs[input_name] = [str(src_id), src_out]
+                # Widget types still consume a slot in widgets_values even when linked
+                if is_widget_type:
+                    widget_idx += 1
             else:
                 if widget_idx < len(widgets):
                     inputs[input_name] = widgets[widget_idx]
@@ -266,6 +286,74 @@ def _convert_generic(node: dict, link_map: dict[int, tuple[int, int]]) -> dict:
                 widget_idx += 1
             elif input_name in defaults:
                 inputs[input_name] = defaults[input_name]
+
+    return {"class_type": node_type, "inputs": inputs}
+
+
+def _convert_from_ui(node: dict, link_map: dict[int, tuple[int, int]]) -> dict:
+    """Fallback conversion for node types not in NODE_SCHEMAS.
+
+    Uses the UI node's own inputs array for ordering, which matches
+    widgets_values layout. Only WIDGET_TYPES (INT/FLOAT/STRING/COMBO/BOOLEAN)
+    consume widget slots. All other types are connection-only and never
+    have widget values.
+
+    Widget types consume a slot even when linked, because widgets_values
+    includes values for all widget positions regardless of link status.
+    """
+    node_type = node.get("type", "")
+    inputs: dict[str, Any] = {}
+    widgets = list(node.get("widgets_values", []))
+    widget_idx = 0
+
+    # Detect control_after_generate: after consuming a numeric seed value,
+    # if the next widget is 'fixed'/'increment'/'decrement'/'randomize',
+    # skip it — it's not a real API input.
+    def _skip_control_after_generate():
+        nonlocal widget_idx
+        if (widget_idx < len(widgets)
+                and isinstance(widgets[widget_idx], str)
+                and widgets[widget_idx] in ("fixed", "increment", "decrement", "randomize")):
+            widget_idx += 1
+
+    # Count unlinked widget-type inputs to determine if linked widget inputs
+    # consume widget slots. If widgets_values matches unlinked count, linked
+    # inputs DON'T consume slots.
+    unlinked_widget_count = sum(
+        1 for inp in node.get("inputs", [])
+        if inp.get("type", "") in WIDGET_TYPES and inp.get("link") is None
+    )
+    linked_consume_slot = len(widgets) > unlinked_widget_count
+
+    for ui_inp in node.get("inputs", []):
+        name = ui_inp["name"]
+        link_id = ui_inp.get("link")
+        inp_type = ui_inp.get("type", "")
+        is_widget_type = inp_type in WIDGET_TYPES
+
+        if not is_widget_type:
+            # Connection-only input (MODEL, CONDITIONING, custom types, etc.)
+            if link_id is not None and link_id in link_map:
+                src_id, src_out = link_map[link_id]
+                inputs[name] = [str(src_id), src_out]
+            continue
+
+        # Widget-type input
+        if link_id is not None:
+            # Has a link — convert to API link
+            if link_id in link_map:
+                src_id, src_out = link_map[link_id]
+                inputs[name] = [str(src_id), src_out]
+            # Only consume widget slot if widgets_values has entries for linked inputs
+            if linked_consume_slot:
+                widget_idx += 1
+                _skip_control_after_generate()
+        else:
+            # No link — use the widget value
+            if widget_idx < len(widgets):
+                inputs[name] = widgets[widget_idx]
+                widget_idx += 1
+                _skip_control_after_generate()
 
     return {"class_type": node_type, "inputs": inputs}
 
@@ -287,7 +375,64 @@ def convert_ui_to_api(ui_workflow: dict, *, expand_subgraphs: bool = True) -> di
 
     nodes = ui_workflow.get("nodes", [])
     links = ui_workflow.get("links", [])
+
+    # Resolve Reroute nodes: build a map from reroute node ID to the
+    # real upstream source. Reroutes just pass through their input.
+    reroute_ids = {n["id"] for n in nodes if n.get("type") == "Reroute"}
+    node_by_id = {n["id"]: n for n in nodes}
+    reroute_source: dict[int, tuple[int, int]] = {}  # reroute_id -> (real_src_id, real_src_out)
+
+    for rid in reroute_ids:
+        # Follow the chain until we find a non-reroute source
+        current = rid
+        visited = set()
+        while current in reroute_ids and current not in visited:
+            visited.add(current)
+            rnode = node_by_id.get(current)
+            if not rnode:
+                break
+            inp = rnode.get("inputs", [])
+            if not inp or inp[0].get("link") is None:
+                break
+            link_id = inp[0]["link"]
+            # Find the link
+            for link in links:
+                if link[0] == link_id:
+                    current = link[1]
+                    out_idx = link[2]
+                    break
+            else:
+                break
+        if current not in reroute_ids and current in node_by_id:
+            # Found real source
+            out_idx = 0
+            # Re-derive output index from the link chain
+            cur = rid
+            while cur in reroute_ids:
+                rnode = node_by_id.get(cur)
+                if not rnode:
+                    break
+                inp = rnode.get("inputs", [])
+                if not inp or inp[0].get("link") is None:
+                    break
+                lid = inp[0]["link"]
+                for link in links:
+                    if link[0] == lid:
+                        cur = link[1]
+                        out_idx = link[2]
+                        break
+                else:
+                    break
+            reroute_source[rid] = (cur, out_idx)
+
     link_map = _build_link_map(links)
+
+    # Override link_map entries that point to reroute nodes
+    for link in links:
+        link_id, src_id, src_out, tgt_id, tgt_slot, ltype = link
+        if src_id in reroute_source:
+            real_src, real_out = reroute_source[src_id]
+            link_map[link_id] = (real_src, real_out)
 
     # Node types that are UI-only and not real ComfyUI nodes
     SKIP_NODE_TYPES = {"Reroute"}

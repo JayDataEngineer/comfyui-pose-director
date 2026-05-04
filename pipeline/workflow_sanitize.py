@@ -80,20 +80,125 @@ def sanitize_api_workflow(
                 if not (isinstance(v, list) and len(v) == 2):
                     del inputs[key]
 
-    # Phase 2: Remove unavailable nodes
+    # Phase 2: Remove unavailable nodes and bridge around them
+    # When a node is removed, downstream nodes that link to it need to be
+    # reconnected to the removed node's source (pass-through bridging).
+    # This prevents chain breakage when non-critical nodes (SeedVR2, Image Comparers)
+    # are unavailable on the target ComfyUI instance.
+    removed_ids: set[str] = set()
+    # Map: removed_node_id -> {input_name: link_ref} (the sources feeding into removed nodes)
+    removed_sources: dict[str, dict[str, Any]] = {}
+
     for nid in list(api.keys()):
         if api[nid]["class_type"] not in available:
+            removed_sources[nid] = {
+                k: v for k, v in api[nid].get("inputs", {}).items()
+                if isinstance(v, list) and len(v) == 2
+            }
             del api[nid]
+            removed_ids.add(nid)
 
-    # Phase 3: Remove dangling link references
-    # A link is [source_node_id, output_index] — source must exist
+    # Phase 3: Bridge dangling references through removed nodes
+    # For each dangling link pointing to a removed node, trace backward
+    # through the removed node's own links to find an available source.
     valid_ids = set(api.keys())
+    max_bridge_depth = 5  # Prevent infinite loops
+
     for nid, node in api.items():
-        dangling = [
-            k for k, v in node["inputs"].items()
+        dangling = {
+            k: v for k, v in node["inputs"].items()
             if isinstance(v, list) and len(v) == 2 and str(v[0]) not in valid_ids
-        ]
-        for key in dangling:
-            del node["inputs"][key]
+        }
+        for key, link_ref in dangling.items():
+            # Try to bridge through removed nodes
+            current_target = str(link_ref[0])
+            desired_output = link_ref[1]
+            bridged = False
+
+            for _ in range(max_bridge_depth):
+                if current_target not in removed_sources:
+                    break
+                # Look at the removed node's source links
+                sources = removed_sources[current_target]
+                # Try to find a source that provides the output index we need
+                # For pass-through nodes, output 0 usually comes from the first linked input
+                for src_key, src_ref in sources.items():
+                    src_node = str(src_ref[0])
+                    if src_node in valid_ids:
+                        # Found an available source — bridge to it
+                        node["inputs"][key] = src_ref
+                        bridged = True
+                        break
+                    elif src_node in removed_ids:
+                        # This source is also removed — follow the chain
+                        current_target = src_node
+                        break
+                if bridged:
+                    break
+
+            if not bridged:
+                # No bridge found — remove the dangling link
+                del node["inputs"][key]
+
+    # Phase 4: Iteratively remove nodes with unsatisfied required inputs
+    # After bridging, some nodes may still lack required inputs (e.g., FaceDetailer
+    # missing bbox_detector because UltralyticsDetectorProvider was removed).
+    # These nodes must also be removed and bridged around.
+    if object_info:
+        for iteration in range(5):  # Max iterations for cascading removals
+            to_remove = set()
+            for nid, node in list(api.items()):
+                ct = node.get("class_type", "")
+                schema = object_info.get(ct)
+                if not schema:
+                    continue
+                required_inputs = set(schema.get("input", {}).get("required", {}).keys())
+                inputs = node.get("inputs", {})
+                # Check if any required input is missing (deleted during bridging)
+                missing_required = [k for k in required_inputs if k not in inputs]
+                if missing_required:
+                    to_remove.add(nid)
+
+            if not to_remove:
+                break  # All remaining nodes have their required inputs
+
+            # Remove nodes with unsatisfied inputs and record their sources
+            for nid in to_remove:
+                removed_sources[nid] = {
+                    k: v for k, v in api[nid].get("inputs", {}).items()
+                    if isinstance(v, list) and len(v) == 2
+                }
+                del api[nid]
+                removed_ids.add(nid)
+
+            # Re-bridge any new dangling references
+            valid_ids = set(api.keys())
+            for nid, node in api.items():
+                dangling = {
+                    k: v for k, v in list(node["inputs"].items())
+                    if isinstance(v, list) and len(v) == 2 and str(v[0]) not in valid_ids
+                }
+                for key, link_ref in dangling.items():
+                    current_target = str(link_ref[0])
+                    bridged = False
+
+                    for _ in range(max_bridge_depth):
+                        if current_target not in removed_sources:
+                            break
+                        sources = removed_sources[current_target]
+                        for src_key, src_ref in sources.items():
+                            src_node = str(src_ref[0])
+                            if src_node in valid_ids:
+                                node["inputs"][key] = src_ref
+                                bridged = True
+                                break
+                            elif src_node in removed_ids:
+                                current_target = src_node
+                                break
+                        if bridged:
+                            break
+
+                    if not bridged:
+                        del node["inputs"][key]
 
     return api

@@ -392,7 +392,6 @@ class TestAllStages:
         assert s.name == "lora"
         assert s.tier_required == "t3"
         assert "sprites_static" in s.depends_on
-        assert "sprites_animated" in s.depends_on
 
     def test_placeholder_stages(self):
         from build_v2.stages.placeholders import (
@@ -400,8 +399,11 @@ class TestAllStages:
         )
         assert TrellisStage(None).tier_required == "t2"
         assert StateStage(None).tier_required == "t1"
+        assert "sheet" in StateStage(None).depends_on
         assert VideoStage(None).tier_required == "t1.5"
+        assert "sprites_static" in VideoStage(None).depends_on
         assert GodotStage(None).tier_required == "t1"
+        assert "sprites_static" in GodotStage(None).depends_on
 
     def test_stage_names_unique(self):
         from build_v2.orchestrator import ALL_STAGE_CLASSES

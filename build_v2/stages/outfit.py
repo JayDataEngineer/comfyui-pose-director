@@ -16,7 +16,13 @@ class OutfitStage(Stage):
     tier_required = "t2"
     depends_on = ["sheet"]
 
-    _SAVE_NODE = "83"
+    # Node IDs in the pre-exported API workflow
+    _ASSET_NODE = "579"  # CharacterAssetSelectorQWEN
+    _SAVE_NODE = "15"    # SaveImage
+
+    # Remote deployment overrides
+    _CHECKPOINT = "sd_xl_base_1.0.safetensors"
+    _RMBG_MODEL = "BEN2"
 
     def is_complete(self, state: dict) -> bool:
         outfit_dir = self.ctx.output_dir / "outfits"
@@ -34,14 +40,28 @@ class OutfitStage(Stage):
         outfit_dir = ctx.output_dir / "outfits"
         outfit_dir.mkdir(parents=True, exist_ok=True)
 
-        patches = {}
+        # VNCCS bug: character registered as "None" (see sheet stage)
+        vnccs_char_name = "None"
+
+        patches = {
+            self._ASSET_NODE: {
+                "character": vnccs_char_name,
+                "top": outfit_desc or outfit_name,
+            },
+            # filename_prefix linked to VNCCS_String output → list crash
+            self._SAVE_NODE: {
+                "filename_prefix": f"PoseDirector/{ctx.character_name}/outfit/{outfit_name}",
+            },
+        }
 
         try:
             images = self.executor.run_api_workflow(
                 workflow_path=ctx.api_workflows_dir / "vnccs_step2_clothes.json",
                 patches=patches,
                 output_node_id=self._SAVE_NODE,
-                timeout=600,
+                timeout=1800,  # Can be slow — SeedVR2 upscale + multiple passes
+                checkpoint_override=self._CHECKPOINT,
+                rmbg_override=self._RMBG_MODEL,
             )
         except Exception as e:
             return StageResult(status="failed", error=f"Outfit generation failed: {e}")

@@ -270,21 +270,33 @@ def _convert_generic(node: dict, link_map: dict[int, tuple[int, int]]) -> dict:
     return {"class_type": node_type, "inputs": inputs}
 
 
-def convert_ui_to_api(ui_workflow: dict) -> dict:
+def convert_ui_to_api(ui_workflow: dict, *, expand_subgraphs: bool = True) -> dict:
     """Convert a ComfyUI UI-format workflow to API format.
 
     Args:
         ui_workflow: Dict loaded from a ComfyUI UI-format JSON file.
+        expand_subgraphs: If True, expand UUID subgraph nodes before conversion.
 
     Returns:
         Dict in ComfyUI API format suitable for the /prompt endpoint.
     """
+    if expand_subgraphs:
+        from pipeline.subgraph_expander import expand_subgraphs as _expand
+
+        ui_workflow = _expand(ui_workflow)
+
     nodes = ui_workflow.get("nodes", [])
     links = ui_workflow.get("links", [])
     link_map = _build_link_map(links)
 
+    # Node types that are UI-only and not real ComfyUI nodes
+    SKIP_NODE_TYPES = {"Reroute"}
+
     api_workflow: dict[str, dict] = {}
     for node in nodes:
+        node_type = node.get("type", "")
+        if node_type in SKIP_NODE_TYPES:
+            continue
         node_id = str(node.get("id"))
         api_workflow[node_id] = _convert_generic(node, link_map)
 

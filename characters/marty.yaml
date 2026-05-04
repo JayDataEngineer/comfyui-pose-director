@@ -1,0 +1,42 @@
+character:
+  name: marty
+  description: "young man, short messy black hair, tired eyes, leather jacket"
+  tier: t2
+
+generation:
+  source: generate
+  quality: turbo
+  seed: 1337
+  prompt: >
+    90s OVA anime cel of a young man in his early 20s, short messy black hair,
+    tired bloodshot eyes, pale skin, wearing a worn leather jacket over a
+    dark turtleneck, dark pants, boots. Stern expression. Clean white background.
+    Cel-shaded animation, visible paint strokes, muted color palette, anime screencap from 1992.
+
+packages:
+  portraits:
+    emotions: [neutral, happy, sad, angry, scared, determined, suspicious, exhausted, smirk, thinking]
+
+  sprites:
+    outfit: casual
+    directions: [front, back, left, right]
+    animations:
+      - name: idle
+        motion: shared
+      - name: walk
+        motion: shared
+      - name: run
+        motion: shared
+      - name: die
+        motion: shared
+
+  outfit:
+    name: armor
+    description: "worn leather armor with metal shoulder plates, studded bracers"
+
+  state:
+    name: beatup
+    description: "bruised face, black eye, bloody nose, torn jacket, scraped hands"
+    apply_to:
+      - portraits
+      - animations: [idle]

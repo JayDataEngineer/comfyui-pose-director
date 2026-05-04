@@ -1,0 +1,22 @@
+character:
+  name: shadow_beast
+  description: "large quadruped shadow creature, glowing red eyes, wispy dark form"
+
+generation:
+  source: import
+  image: ../reference/shadow_beast_concept.png
+
+packages:
+  portraits:
+    emotions: [neutral, angry]
+
+  sprites:
+    outfit: default
+    directions: [front, back, left, right]
+    animations:
+      - name: idle
+        motion: shared
+      - name: attack
+        motion: shared
+      - name: die
+        motion: shared

@@ -1,11 +1,39 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
-.venv/
 *.egg-info/
 dist/
 build/
+.venv/
+
+# Environment
 .env
-.coverage
+
+# Generated output (sprites, renders, videos)
+output/
+
+# Conversation logs
+conv.txt
+convo.txt
 CONV.txt
+
+# Large docs
 PROGRESS.md
+docs-site/
+
+# Test / coverage
+.coverage
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Reference images (binary, not for git)
+reference/*.png
+reference/*.jpg

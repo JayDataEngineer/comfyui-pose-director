@@ -1,0 +1,25 @@
+character:
+  name: shopkeeper
+  description: "middle-aged woman, warm face, curly brown hair, apron"
+
+generation:
+  source: generate
+  quality: turbo
+  seed: 42
+  prompt: >
+    90s OVA anime cel of a middle-aged woman, warm round face, curly brown hair
+    tied back, wearing a shop apron over a simple dress. Kind eyes, slight smile.
+    Clean white background. Cel-shaded animation, muted color palette.
+
+packages:
+  portraits:
+    emotions: [neutral, happy]
+
+  sprites:
+    outfit: default
+    directions: [front]
+    animations:
+      - name: idle
+        motion: shared
+      - name: walk
+        motion: shared

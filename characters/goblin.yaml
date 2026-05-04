@@ -1,0 +1,26 @@
+character:
+  name: goblin
+  description: "small green goblin merchant, hunched posture, pointy ears, sly grin"
+
+generation:
+  source: generate
+  quality: turbo
+  seed: 77
+  prompt: >
+    90s OVA anime cel of a small goblin merchant creature, bright green skin, large
+    pointy ears sticking out sideways, beady yellow eyes with a sly knowing grin,
+    wearing a patched brown leather vest over a dirty white shirt, belt with pouches
+    and trinkets, bare feet with long toenails. Hunched posture, hands clasped together.
+    Clean white background. Cel-shaded animation, visible paint strokes, earthy color palette,
+    anime screencap from 1994.
+
+packages:
+  portraits:
+    emotions: [neutral, happy, angry]
+
+  sprites:
+    outfit: default
+    directions: [front]
+    animations:
+      - name: idle
+        motion: shared

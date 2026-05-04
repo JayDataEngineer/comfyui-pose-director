@@ -1,0 +1,27 @@
+character:
+  name: nova
+  description: "cheerful young woman, bright pink bob haircut, freckles, oversized sweater"
+
+generation:
+  source: generate
+  quality: turbo
+  seed: 42
+  prompt: >
+    90s OVA anime cel of a cheerful young woman in her late teens, bright bubblegum
+    pink bob haircut with bangs, scattered freckles across her nose and cheeks, warm
+    brown eyes, wearing an oversized cream knit sweater with a star pattern, dark leggings,
+    ankle boots. Friendly smile, hand raised in a wave. Clean white background.
+    Cel-shaded animation, visible paint strokes, warm color palette, anime screencap from 1993.
+
+packages:
+  portraits:
+    emotions: [neutral, happy, sad, angry, scared]
+
+  sprites:
+    outfit: default
+    directions: [front]
+    animations:
+      - name: idle
+        motion: shared
+      - name: walk
+        motion: shared

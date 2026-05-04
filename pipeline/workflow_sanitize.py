@@ -22,28 +22,63 @@ from typing import Any
 # Only add entries where the replacement has compatible inputs/outputs.
 NODE_ALIASES: dict[str, str] = {
     "Text Find and Replace": "ReplaceText",
-    "Text Concatenate": "CR Text Concatenate",
+    "Text Concatenate": "VNCCS_PromptConcat",
+}
+
+# Input name remapping for aliased nodes: {old_class_type: {old_input: new_input}}
+INPUT_ALIASES: dict[str, dict[str, str]] = {
+    "Text Concatenate": {
+        "text_a": "a", "text_b": "b", "text_c": "c", "text_d": "d",
+        "delimiter": "separator",
+    },
 }
 
 
 def sanitize_api_workflow(
     api: dict[str, dict],
     available: set[str],
+    object_info: dict | None = None,
 ) -> dict[str, dict]:
     """Remap aliases, remove unavailable nodes, prune dangling references.
 
     Args:
         api: API-format workflow dict (node_id -> {class_type, inputs}).
         available: Set of registered class_type strings on the target ComfyUI.
+        object_info: Optional full object_info dict for pruning unknown inputs
+            after alias remapping.
 
     Returns:
         Cleaned API-format workflow dict.
     """
-    # Phase 1: Remap aliases
+    # Phase 1: Remap aliases + input names
     for nid, node in api.items():
         ct = node["class_type"]
         if ct in NODE_ALIASES and NODE_ALIASES[ct] in available:
+            # Remap input names for this node type
+            input_map = INPUT_ALIASES.get(ct, {})
+            inputs = node.get("inputs", {})
+            for old_name, new_name in input_map.items():
+                if old_name in inputs:
+                    inputs[new_name] = inputs.pop(old_name)
             node["class_type"] = NODE_ALIASES[ct]
+
+    # Phase 1b: Prune unknown inputs after alias remap (if schema available)
+    if object_info:
+        for nid, node in api.items():
+            ct = node.get("class_type", "")
+            schema = object_info.get(ct)
+            if not schema:
+                continue
+            valid_inputs = set()
+            for category in ("required", "optional"):
+                valid_inputs.update(schema.get("input", {}).get(category, {}).keys())
+            inputs = node.get("inputs", {})
+            unknown = [k for k in inputs if k not in valid_inputs]
+            for key in unknown:
+                # Only remove literal values, not link references
+                v = inputs[key]
+                if not (isinstance(v, list) and len(v) == 2):
+                    del inputs[key]
 
     # Phase 2: Remove unavailable nodes
     for nid in list(api.keys()):

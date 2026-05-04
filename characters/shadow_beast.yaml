@@ -1,6 +1,8 @@
+# T1.5 — imported shadow beast, shared-motion animations
 character:
   name: shadow_beast
   description: "large quadruped shadow creature, glowing red eyes, wispy dark form"
+  tier: t1.5
 
 generation:
   source: import
@@ -13,7 +15,8 @@ packages:
   sprites:
     outfit: default
     directions: [front, back, left, right]
-    animations:
+    static: true
+    animated:
       - name: idle
         motion: shared
       - name: attack

@@ -116,7 +116,13 @@ G. Lip Sync             InfiniteTalk (not yet installed)                        
 
 ### Workflow Files (Source of Truth)
 
-All workflows are in **ComfyUI UI format** — load them directly in ComfyUI's browser to inspect, edit, and debug. The AIO script and tests convert them to API format on the fly via `pipeline/ui_to_api.py`.
+**Two formats, used appropriately:**
+
+1. **Our custom workflows** — ComfyUI UI format in `workflows/`. Converted to API format on the fly via `pipeline/ui_to_api.py`. These have no UUID subgraph nodes.
+
+2. **VNCCS workflows** — Pre-exported API format in `workflows/api/`. Exported once from ComfyUI browser via "Save (API Format)". Simple key-value patching, no converter needed. The browser handles subgraph expansion internally.
+
+#### Our Workflows (UI format, converted at runtime)
 
 | File | Stage | Description |
 |------|-------|-------------|
@@ -126,17 +132,33 @@ All workflows are in **ComfyUI UI format** — load them directly in ComfyUI's b
 | `02_vnccs_edit_mesh.json` | C+D | Static pose pipeline: OpenPose → PoseManipulator → VNCCS edit |
 | `03_motion_keyframes_qwen_edit_mesh.json` | C+D | Motion keyframes with VNCCS editing (batch split version) |
 | `04_ltx_video_assembly.json` | E | LTX Video 2.3 with keyframe guides |
+| `05_sprite_bodymesh_edit.json` | Sprite | BodyMeshRenderer + VNCCS edit sprite pipeline |
 | `06_ltx_edit_anything_postprocess.json` | F | Post-processing with IC-LoRA |
 | `07_lip_sync.json` | G | Lip sync (placeholder) |
 
-**No more parallel API-format JSONs.** The `pipeline/ui_to_api.py` module handles conversion:
+#### VNCCS Workflows (pre-exported API format)
+
+| File | Step | Description |
+|------|------|-------------|
+| `api/vnccs_step1_char_sheet.json` | Step 1 | Character sheet from prompt |
+| `api/vnccs_step11_clone_existing.json` | Step 1.1 | Character sheet from reference image |
+| `api/vnccs_step2_clothes.json` | Step 2 | Outfit/clothes generator |
+| `api/vnccs_step3_emotions.json` | Step 3 | Emotion studio (face variants) |
+| `api/vnccs_step4_sprites.json` | Step 4 | Sprite creator |
+| `api/vnccs_step5_lora_dataset.json` | Step 5 | LoRA training dataset |
+
+#### UI-to-API Conversion (our workflows only)
+
+`pipeline/ui_to_api.py` handles conversion for our custom workflows:
 - `load_ui_workflow(path)` — load UI JSON
 - `patch_ui_workflow(workflow, patches)` — batch-patch widget values by node type
-- `patch_widget_value(workflow, node_type, input_name, value, node_index=0)` — single value patch
-- `patch_connection(workflow, ...)` — add/rewire connections
 - `convert_ui_to_api(workflow)` → API-format dict ready for `/prompt`
 
-The AIO runner (`scripts/run_full_pipeline.py`) loads these files, patches runtime values (image paths, seeds, prompts), converts, submits, and saves per-stage artifacts to `output/run_YYYYMMDD_HHMMSS/{stage_a,stage_c,stage_d,stage_e}/` alongside the patched workflow JSONs.
+#### API-Format Patching (VNCCS workflows)
+
+VNCCS API-format JSONs are patched directly — load JSON, change `inputs` values by node ID, submit. No conversion needed. See `build_v2/api_patcher.py`.
+
+The AIO runner (`scripts/run_full_pipeline.py`) and build V2 system (`build_v2/`) handle both formats transparently.
 
 ---
 

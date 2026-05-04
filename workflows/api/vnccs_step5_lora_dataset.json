@@ -1,0 +1,19 @@
+{
+  "8": {
+    "class_type": "Save Text File",
+    "inputs": {
+      "text": [
+        "7",
+        0
+      ],
+      "path": [
+        "7",
+        0
+      ]
+    }
+  },
+  "7": {
+    "class_type": "DatasetGenerator",
+    "inputs": {}
+  }
+}

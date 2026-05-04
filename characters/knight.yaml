@@ -1,6 +1,8 @@
+# T1.5 — stoic knight, shared-motion animations
 character:
   name: knight
   description: "tall stoic knight in weathered plate armor, scarred face, short grey hair"
+  tier: t1.5
 
 generation:
   source: generate
@@ -22,7 +24,8 @@ packages:
   sprites:
     outfit: default
     directions: [front]
-    animations:
+    static: true
+    animated:
       - name: idle
         motion: shared
       - name: walk

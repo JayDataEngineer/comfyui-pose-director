@@ -1,7 +1,12 @@
 """Convert ComfyUI UI-format workflows to API format and patch them.
 
-This module provides the bridge between human-friendly UI-format workflow JSONs
-(loaded in ComfyUI's browser) and the API format required by the /prompt endpoint.
+This module converts our custom workflows (Z-Image, sprites, etc.) from UI format
+to API format. VNCCS workflows are handled separately via pre-exported API-format
+JSONs in ``workflows/api/`` — see ``build_v2/api_patcher.py`` for that path.
+
+Two-path workflow strategy:
+  1. **Our workflows** (``workflows/*.json``): UI format → this converter → API format
+  2. **VNCCS workflows** (``workflows/api/*.json``): Pre-exported API format → direct patch
 
 Usage:
     from pipeline.ui_to_api import load_ui_workflow, patch_ui_workflow, convert_ui_to_api

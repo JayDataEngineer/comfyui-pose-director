@@ -249,13 +249,23 @@ class TestNodeSchemasCoverage:
     """Ensure we have schemas for all node types in our workflow files."""
 
     def test_all_workflow_node_types_have_schemas(self):
+        """Check schemas for our custom workflows only.
+
+        VNCCS workflows (VN_Step*.json) use pre-exported API format
+        and don't need schemas in our UI-to-API converter.
+        """
         missing = set()
         for wf_path in WORKFLOWS_DIR.glob("*.json"):
-            if "_api" in wf_path.name or "Pose Studio" in wf_path.name:
+            name = wf_path.name
+            # Skip non-our workflows
+            if "_api" in name or "Pose Studio" in name or name.startswith("VN_"):
                 continue
             ui = load_ui_workflow(wf_path)
             for node in ui.get("nodes", []):
                 node_type = node.get("type", "")
+                # Skip types handled by the fallback converter or that are UI-only
+                if node_type in ("Reroute",):
+                    continue
                 if node_type not in NODE_SCHEMAS:
                     missing.add(node_type)
 

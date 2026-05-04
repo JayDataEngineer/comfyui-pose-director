@@ -31,7 +31,8 @@ class TestYAMLValidation:
         assert data["character"]["name"] == "marty"
         assert data["character"]["tier"] == "t2"
         assert len(data["packages"]["portraits"]["emotions"]) == 10
-        assert len(data["packages"]["sprites"]["animations"]) == 4
+        sprites_anim = data["packages"]["sprites"].get("animated") or data["packages"]["sprites"].get("animations", [])
+        assert len(sprites_anim) == 4
 
     def test_shadow_beast_valid(self):
         data = load_character_yaml(YAML_DIR / "shadow_beast.yaml")

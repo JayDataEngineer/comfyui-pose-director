@@ -230,5 +230,7 @@ curl http://127.0.0.1:8465/history/<prompt_id>
 ```
 
 ### Workflow JSON Format
-Save any workflow in ComfyUI UI as "API Format" to get the JSON.
-Each node is keyed by a unique ID with `class_type` and `inputs`.
+
+**VNCCS workflows**: Pre-exported API format from ComfyUI browser ("Save (API Format)"). Stored in `workflows/api/`. Each node is keyed by ID with `class_type` and `inputs` — patch directly, no converter needed.
+
+**Our custom workflows**: UI format, converted at runtime via `pipeline/ui_to_api.py`.

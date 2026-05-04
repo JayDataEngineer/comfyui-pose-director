@@ -1,6 +1,8 @@
+# T1.5 background NPC — minimal with shared-motion animation
 character:
   name: shopkeeper
   description: "middle-aged woman, warm face, curly brown hair, apron"
+  tier: t1.5
 
 generation:
   source: generate
@@ -18,7 +20,8 @@ packages:
   sprites:
     outfit: default
     directions: [front]
-    animations:
+    static: true
+    animated:
       - name: idle
         motion: shared
       - name: walk

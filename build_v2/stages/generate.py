@@ -79,7 +79,7 @@ class GenerateStage(Stage):
             workflow_path=ctx.workflows_dir / "00_z_image_character.json",
             patches=patches,
             output_node_type="SaveImage",
-            timeout=600,
+            timeout=900,  # Remote ComfyUI may need time for model loading
         )
 
         if not images:

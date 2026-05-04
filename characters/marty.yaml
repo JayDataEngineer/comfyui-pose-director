@@ -1,3 +1,4 @@
+# T2 — named character, 4-direction sprites, outfit variant, state condition
 character:
   name: marty
   description: "young man, short messy black hair, tired eyes, leather jacket"
@@ -20,15 +21,20 @@ packages:
   sprites:
     outfit: casual
     directions: [front, back, left, right]
-    animations:
+    static: true
+    animated:
       - name: idle
-        motion: shared
+        motion: custom
+        prompt: "nervous fidgeting, shifting weight, looking around anxiously"
       - name: walk
-        motion: shared
+        motion: custom
+        prompt: "cautious paranoid walk, hunched shoulders, looking left and right"
       - name: run
-        motion: shared
+        motion: custom
+        prompt: "desperate sprint, arms pumping, leaning forward"
       - name: die
-        motion: shared
+        motion: custom
+        prompt: "dramatic slow collapse, reaching out hand, falling to knees then forward"
 
   outfit:
     name: armor

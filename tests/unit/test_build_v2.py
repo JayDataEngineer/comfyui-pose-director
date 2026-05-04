@@ -254,3 +254,166 @@ class TestGenerateStage:
             ctx.design_dir.mkdir(parents=True, exist_ok=True)
             ctx.approved_image.write_bytes(b"fake png")
             assert stage.is_complete({}) is True
+
+
+class TestTierFromYAML:
+    """Verify tier inference and stage enablement from real YAML structure."""
+
+    def test_shopkeeper_tier_and_stages(self):
+        import yaml
+        data = yaml.safe_load(Path("characters/shopkeeper.yaml").read_text())
+        assert infer_tier(data) >= "t1"
+        stages = get_enabled_stages(data, data["character"]["tier"])
+        assert "generate" in stages
+        assert "sheet" in stages
+        assert "emotions" in stages
+        assert "sprites_static" in stages
+        assert "sprites_animated" in stages
+
+    def test_marty_tier_and_stages(self):
+        import yaml
+        data = yaml.safe_load(Path("characters/marty.yaml").read_text())
+        tier = data["character"]["tier"]
+        assert tier == "t2"
+        stages = get_enabled_stages(data, tier)
+        assert "generate" in stages
+        assert "sheet" in stages
+        assert "emotions" in stages
+        assert "sprites_static" in stages
+        assert "sprites_animated" in stages
+        assert "outfit" in stages
+        assert "state" in stages
+
+    def test_shadow_beast_tier_and_stages(self):
+        import yaml
+        data = yaml.safe_load(Path("characters/shadow_beast.yaml").read_text())
+        stages = get_enabled_stages(data, data["character"]["tier"])
+        assert "generate" in stages
+        assert "sheet" in stages
+        assert "sprites_animated" in stages
+
+    def test_import_tier_t0(self):
+        data = {
+            "character": {"name": "test", "tier": "t0"},
+            "generation": {"source": "import", "image": "ref.png"},
+        }
+        assert infer_tier(data) == "t0"
+        stages = get_enabled_stages(data, "t0")
+        assert stages == {"generate"}  # Only identity, no sheet/emotions/sprites
+
+    def test_generate_only_tier_t0(self):
+        data = {
+            "character": {"name": "test", "tier": "t0"},
+            "generation": {"source": "generate", "prompt": "a cat", "quality": "turbo"},
+        }
+        stages = get_enabled_stages(data, "t0")
+        assert stages == {"generate"}
+
+    def test_t1_with_portraits(self):
+        data = {
+            "character": {"name": "test", "tier": "t1"},
+            "generation": {"source": "generate", "prompt": "a cat"},
+            "packages": {
+                "portraits": {"emotions": ["neutral", "happy"]},
+            },
+        }
+        assert infer_tier(data) == "t1"
+        stages = get_enabled_stages(data, "t1")
+        assert "generate" in stages
+        assert "sheet" in stages
+        assert "emotions" in stages
+        assert "sprites_animated" not in stages
+
+    def test_t3_lora(self):
+        data = {
+            "character": {"name": "test", "tier": "t3"},
+            "generation": {"source": "generate", "prompt": "a cat"},
+            "packages": {
+                "lora": {"enabled": True},
+            },
+        }
+        assert infer_tier(data) == "t3"
+        stages = get_enabled_stages(data, "t3")
+        assert "lora" in stages
+
+
+class TestAllStages:
+    """Verify all 11 stages instantiate with correct tier and dependencies."""
+
+    def test_stage_count(self):
+        from build_v2.orchestrator import ALL_STAGE_CLASSES
+        assert len(ALL_STAGE_CLASSES) == 11
+
+    def test_generate_stage(self):
+        from build_v2.stages.generate import GenerateStage
+        s = GenerateStage(None)
+        assert s.name == "generate"
+        assert s.tier_required == "t0"
+        assert s.depends_on == []
+
+    def test_sheet_stage(self):
+        from build_v2.stages.sheet import SheetStage
+        s = SheetStage(None)
+        assert s.name == "sheet"
+        assert s.tier_required == "t1"
+        assert "generate" in s.depends_on
+
+    def test_emotions_stage(self):
+        from build_v2.stages.emotions import EmotionsStage
+        s = EmotionsStage(None)
+        assert s.name == "emotions"
+        assert s.tier_required == "t1"
+        assert "sheet" in s.depends_on
+
+    def test_sprites_static_stage(self):
+        from build_v2.stages.sprites_static import SpritesStaticStage
+        s = SpritesStaticStage(None)
+        assert s.name == "sprites_static"
+        assert s.tier_required == "t1"
+        assert "sheet" in s.depends_on
+
+    def test_sprites_animated_stage(self):
+        from build_v2.stages.sprites_animated import SpritesAnimatedStage
+        s = SpritesAnimatedStage(None)
+        assert s.name == "sprites_animated"
+        assert s.tier_required == "t1.5"
+        assert "generate" in s.depends_on
+
+    def test_outfit_stage(self):
+        from build_v2.stages.outfit import OutfitStage
+        s = OutfitStage(None)
+        assert s.name == "outfit"
+        assert s.tier_required == "t2"
+        assert "sheet" in s.depends_on
+
+    def test_lora_stage(self):
+        from build_v2.stages.lora import LoraStage
+        s = LoraStage(None)
+        assert s.name == "lora"
+        assert s.tier_required == "t3"
+        assert "sprites_static" in s.depends_on
+        assert "sprites_animated" in s.depends_on
+
+    def test_placeholder_stages(self):
+        from build_v2.stages.placeholders import (
+            TrellisStage, StateStage, VideoStage, GodotStage,
+        )
+        assert TrellisStage(None).tier_required == "t2"
+        assert StateStage(None).tier_required == "t1"
+        assert VideoStage(None).tier_required == "t1.5"
+        assert GodotStage(None).tier_required == "t1"
+
+    def test_stage_names_unique(self):
+        from build_v2.orchestrator import ALL_STAGE_CLASSES
+        names = [cls.name for cls in ALL_STAGE_CLASSES]
+        assert len(names) == len(set(names)), f"Duplicate stage names: {names}"
+
+    def test_dag_valid(self):
+        """Verify DAG has no cycles with all stages."""
+        from build_v2.orchestrator import ALL_STAGE_CLASSES
+        from build_v2.dag import build_adjacency, topological_sort
+        stages = [cls(None) for cls in ALL_STAGE_CLASSES]
+        graph = build_adjacency(stages)
+        assert len(graph) == len(stages)
+        order = topological_sort(graph)
+        assert len(order) == len(stages)

@@ -1,6 +1,8 @@
+# T1.5 — small green goblin merchant, shared-motion idle
 character:
   name: goblin
   description: "small green goblin merchant, hunched posture, pointy ears, sly grin"
+  tier: t1.5
 
 generation:
   source: generate
@@ -21,6 +23,7 @@ packages:
   sprites:
     outfit: default
     directions: [front]
-    animations:
+    static: true
+    animated:
       - name: idle
         motion: shared

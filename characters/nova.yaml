@@ -1,6 +1,8 @@
+# T1.5 — cheerful young woman, shared-motion animations
 character:
   name: nova
   description: "cheerful young woman, bright pink bob haircut, freckles, oversized sweater"
+  tier: t1.5
 
 generation:
   source: generate
@@ -20,7 +22,8 @@ packages:
   sprites:
     outfit: default
     directions: [front]
-    animations:
+    static: true
+    animated:
       - name: idle
         motion: shared
       - name: walk

@@ -2,7 +2,12 @@
   "mcpServers": {
     "comfyui-agent": {
       "command": "/home/ubuntu/Documents/programs/Comfy-Cozy/.venv/bin/python",
-      "args": ["-m", "agent.mcp_server"]
+      "args": ["-m", "agent.mcp_server"],
+      "env": {
+        "COMFYUI_HOST": "100.86.69.57",
+        "COMFYUI_PORT": "18800",
+        "COMFYUI_PATH_PREFIX": "/comfyui"
+      }
     }
   }
 }

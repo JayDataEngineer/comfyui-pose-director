@@ -1,0 +1,24 @@
+# T1 test — minimal NPC with static sprites and emotions only
+character:
+  name: t1_npc
+  description: "young villager with simple tunic, brown hair, neutral expression"
+  tier: t1
+
+generation:
+  source: generate
+  quality: turbo
+  seed: 42
+  prompt: >
+    90s OVA anime cel of a young villager in their late teens, simple homespun
+    brown tunic with a rope belt, short brown hair, neutral expression.
+    Average build, standing upright. Clean white background.
+    Cel-shaded animation, muted earth tone palette.
+
+packages:
+  portraits:
+    emotions: [neutral, happy]
+
+  sprites:
+    outfit: default
+    directions: [front]
+    static: true

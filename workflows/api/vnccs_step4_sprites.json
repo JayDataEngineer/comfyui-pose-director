@@ -1,0 +1,36 @@
+{
+  "4": {
+    "class_type": "CharacterSheetCropper",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "mask": [
+        "1",
+        2
+      ],
+      "min_size": 128,
+      "target_height": 3072
+    }
+  },
+  "1": {
+    "class_type": "SpriteGenerator",
+    "inputs": {
+      "character": "VNCCS_MASCOT"
+    }
+  },
+  "5": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "4",
+        0
+      ],
+      "filename_prefix": [
+        "1",
+        1
+      ]
+    }
+  }
+}

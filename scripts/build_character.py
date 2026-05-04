@@ -79,12 +79,12 @@ VALID_EMOTIONS = {
     "excited", "exhausted", "nervous", "pout", "scared", "serious", "surprised",
     "thinking", "grin", "evil grin", "light smile", "sad smile", "forced smile",
     "doyagao", "smirk", "smug", "troll face", "horrified", "screaming", "sobbing",
-    "traumatized", "despair",
+    "traumatized", "despair", "suspicious",
 }
 
 VALID_DIRECTIONS = {"front", "back", "left", "right"}
 VALID_MOTION_SOURCES = {"shared", "custom", "manual", "file"}
-VALID_TIERS = {"t1", "t2", "t3"}
+VALID_TIERS = {"t0", "t1", "t1.5", "t2", "t3"}
 VALID_QUALITIES = {"turbo", "base"}
 
 VNCCS_PROMPT = "Draw character from image2"
@@ -103,7 +103,17 @@ DIRECTION_ROTATIONS = {
 }
 
 TIER_DEFAULTS = {
+    "t0": {
+        "directions": ["front"],
+        "body_source": "import",
+        "motion_source": "shared",
+    },
     "t1": {
+        "directions": ["front"],
+        "body_source": "anny",
+        "motion_source": "shared",
+    },
+    "t1.5": {
         "directions": ["front"],
         "body_source": "anny",
         "motion_source": "shared",
@@ -193,7 +203,9 @@ def validate_character(data: dict, path: Path):
         if invalid:
             die(f"{path}: invalid directions: {invalid}")
 
-        for anim in sprites.get("animations", []):
+        # Support both "animations" (legacy) and "animated" (new tier-based schema)
+        animations = sprites.get("animations") or sprites.get("animated") or []
+        for anim in animations:
             if anim.get("motion") and anim["motion"] not in VALID_MOTION_SOURCES:
                 die(f"{path}: invalid motion source '{anim['motion']}' for animation '{anim.get('name')}'")
             if anim.get("motion") == "file" and not anim.get("path"):
@@ -377,7 +389,7 @@ def make_plan(
         directions = sprites_pkg.get("directions", TIER_DEFAULTS[tier]["directions"])
         body_source = TIER_DEFAULTS[tier]["body_source"]
 
-        for anim in sprites_pkg.get("animations", []):
+        for anim in sprites_pkg.get("animations") or sprites_pkg.get("animated") or []:
             anim_name = anim["name"]
             motion_source = anim.get("motion", TIER_DEFAULTS[tier]["motion_source"])
             sprite_key = f"{outfit}/normal/{anim_name}"
@@ -435,7 +447,7 @@ def make_plan(
         outfit_desc = outfit_pkg.get("description", "")
         directions = sprites_pkg.get("directions", TIER_DEFAULTS[tier]["directions"])
 
-        for anim in sprites_pkg.get("animations", []):
+        for anim in sprites_pkg.get("animations") or sprites_pkg.get("animated") or []:
             anim_name = anim["name"]
             sprite_key = f"{outfit_name}/normal/{anim_name}"
             anim_state = state.get("sprites", {}).get(sprite_key, {})

@@ -22,20 +22,38 @@ from build_v2.workflow_executor import WorkflowExecutor
 
 # Import all stages
 from build_v2.stages.generate import GenerateStage
+from build_v2.stages.sheet import SheetStage
+from build_v2.stages.emotions import EmotionsStage
+from build_v2.stages.sprites_static import SpritesStaticStage
 from build_v2.stages.sprites_animated import SpritesAnimatedStage
+from build_v2.stages.outfit import OutfitStage
+from build_v2.stages.lora import LoraStage
+from build_v2.stages.placeholders import (
+    TrellisStage,
+    StateStage,
+    VideoStage,
+    GodotStage,
+)
 
 
 def log(msg: str):
     print(f"[build] {msg}", flush=True)
 
 
-# Registry of all available stages (name -> class)
+# Registry of all available stages (name -> class).
+# Order here doesn't matter — DAG resolves dependencies.
 ALL_STAGE_CLASSES = [
-    GenerateStage,
-    SpritesAnimatedStage,
-    # More stages added in Phase 2-3:
-    # SheetStage, EmotionsStage, SpritesStaticStage,
-    # TrellisStage, OutfitStage, StateStage, VideoStage, GodotStage,
+    GenerateStage,       # t0  — identity (Z-Image or import)
+    SheetStage,          # t1  — VNCCS character sheet
+    EmotionsStage,       # t1  — emotion portraits
+    SpritesStaticStage,  # t1  — static sprite sheet
+    SpritesAnimatedStage,# t1.5 — animated sprites (HY-Motion + Anny)
+    OutfitStage,         # t2  — outfit variant
+    TrellisStage,        # t2  — 3D model (placeholder)
+    StateStage,          # t1  — state re-edit (placeholder)
+    VideoStage,          # t1.5— LTX video (placeholder)
+    GodotStage,          # t1  — Godot export (placeholder)
+    LoraStage,           # t3  — LoRA training dataset
 ]
 
 
@@ -144,6 +162,7 @@ class BuildOrchestrator:
                 continue
 
             log(f"[{stage.name}] running...")
+            self.executor.free_memory()
             stage_start = time.time()
             try:
                 result = stage.run(self.state)
@@ -156,6 +175,7 @@ class BuildOrchestrator:
                     artifacts=result.artifacts,
                     input_hash=yaml_hash,
                     duration_s=duration,
+                    error=result.error,
                     meta=result.meta,
                 )
                 log(f"[{stage.name}] {result.status} ({duration:.1f}s)")

@@ -7,9 +7,7 @@ from build_v2.stages.sprites_static import SpritesStaticStage
 from build_v2.stages.sprites_animated import SpritesAnimatedStage
 from build_v2.stages.outfit import OutfitStage
 from build_v2.stages.lora import LoraStage
-from build_v2.stages.placeholders import (
-    TrellisStage,
-    StateStage,
-    VideoStage,
-    GodotStage,
-)
+from build_v2.stages.state import StateStage
+from build_v2.stages.trellis import TrellisStage
+from build_v2.stages.video import VideoStage
+from build_v2.stages.placeholders import GodotStage

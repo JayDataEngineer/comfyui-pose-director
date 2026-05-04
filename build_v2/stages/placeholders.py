@@ -1,7 +1,10 @@
-"""Placeholder stages for not-yet-implemented pipeline steps.
+"""Godot export stage and placeholder base class.
 
-These stages exist so the DAG resolves and the build system runs without error.
-They report "skipped" with an explanation rather than failing.
+GodotStage is fully implemented. Other stages that were previously
+placeholders have been moved to their own modules:
+- state.py (StateStage)
+- trellis.py (TrellisStage)
+- video.py (VideoStage)
 """
 
 from __future__ import annotations
@@ -22,37 +25,6 @@ class _Placeholder(Stage):
 
     def run(self, state: dict) -> StageResult:
         return StageResult(status="skipped", error=self.reason)
-
-
-class TrellisStage(_Placeholder):
-    name = "trellis"
-    tier_required = "t2"
-    depends_on = ["generate"]
-    reason = "TRELLIS 3D model generation not yet implemented"
-
-
-class StateStage(_Placeholder):
-    """Re-edit character with state condition (bruised, wet, etc).
-
-    Uses VNCCS Step 1.1 with modified instruction to apply visual state changes.
-    The state package in YAML defines name + description of the condition.
-    """
-    name = "state"
-    tier_required = "t1"
-    depends_on = ["sheet"]
-    reason = "State condition re-edit not yet implemented — needs VNCCS Step 1.1 with state prompt"
-
-
-class VideoStage(_Placeholder):
-    """LTX Video 2.3 assembly from sprite frames into animation clips.
-
-    Uses 04_ltx_video_assembly.json workflow to combine sprite frames
-    into smooth video animations with keyframe guides.
-    """
-    name = "video"
-    tier_required = "t1.5"
-    depends_on = ["sprites_static"]
-    reason = "LTX Video assembly not yet implemented"
 
 
 class GodotStage(Stage):

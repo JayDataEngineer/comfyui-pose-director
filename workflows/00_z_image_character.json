@@ -1,6 +1,6 @@
 {
   "last_node_id": 10,
-  "last_link_id": 10,
+  "last_link_id": 11,
   "nodes": [
     {
       "id": 1,
@@ -55,7 +55,7 @@
         "qwen_3_4b.safetensors",
         "lumina2"
       ],
-      "_comment": "Type MUST be 'lumina2' \u2014 this is how ComfyUI routes to Z-Image's Qwen 3 4B text encoder",
+      "_comment": "Type MUST be 'lumina2' — this is how ComfyUI routes to Z-Image's Qwen 3 4B text encoder",
       "inputs": [
         {
           "name": "clip_name",
@@ -372,7 +372,9 @@
         {
           "name": "IMAGE",
           "type": "IMAGE",
-          "links": []
+          "links": [
+            11
+          ]
         }
       ]
     },
@@ -394,7 +396,7 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "link": null
+          "link": 11
         },
         {
           "name": "filename_prefix",
@@ -477,6 +479,14 @@
       9,
       1,
       "VAE"
+    ],
+    [
+      11,
+      9,
+      0,
+      10,
+      0,
+      "IMAGE"
     ]
   ],
   "config": {},

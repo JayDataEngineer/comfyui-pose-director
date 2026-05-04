@@ -1,0 +1,24 @@
+# T1 — Traveling merchant NPC
+character:
+  name: merchant
+  description: "portly man, trimmed mustache, fancy vest, traveled clothes"
+  tier: t1
+
+generation:
+  source: generate
+  quality: turbo
+  seed: 505
+  prompt: >
+    90s OVA anime cel of a portly man in his forties, well-groomed mustache,
+    receding brown hair, wearing a brocaded vest over a white shirt with puffy sleeves,
+    leather traveling boots. Jovial expression, round face, carrying a large pack.
+    Clean white background. Cel-shaded animation, rich warm color palette.
+
+packages:
+  portraits:
+    emotions: [neutral, happy, sad, thinking]
+
+  sprites:
+    outfit: default
+    directions: [front]
+    static: true

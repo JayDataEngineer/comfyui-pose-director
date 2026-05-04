@@ -1,0 +1,24 @@
+# T1 — Town guard NPC
+character:
+  name: guard
+  description: "broad-shouldered man, short black hair, chainmail armor, stern face"
+  tier: t1
+
+generation:
+  source: generate
+  quality: turbo
+  seed: 201
+  prompt: >
+    90s OVA anime cel of a broad-shouldered man in his thirties, short black hair,
+    square jaw with a scar across his left cheek, wearing chainmail armor over a
+    red tabard. Stern expression, muscular build, standing at attention.
+    Clean white background. Cel-shaded animation, dark muted palette.
+
+packages:
+  portraits:
+    emotions: [neutral, angry, determined, smirk]
+
+  sprites:
+    outfit: default
+    directions: [front]
+    static: true

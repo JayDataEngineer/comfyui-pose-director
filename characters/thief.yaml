@@ -1,0 +1,24 @@
+# T1 — Young thief NPC
+character:
+  name: thief
+  description: "teenage girl, messy auburn hair, sly grin, dark cloak"
+  tier: t1
+
+generation:
+  source: generate
+  quality: turbo
+  seed: 303
+  prompt: >
+    90s OVA anime cel of a teenage girl around sixteen, messy auburn hair escaping
+    from a dark hooded cloak, sly grin with bright green eyes, leather fingerless
+    gloves and a belt of small pouches. Lean athletic build, slightly crouched stance.
+    Clean white background. Cel-shaded animation, dark shadowy palette.
+
+packages:
+  portraits:
+    emotions: [neutral, smirk, scared, thinking]
+
+  sprites:
+    outfit: default
+    directions: [front]
+    static: true

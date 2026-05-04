@@ -1,0 +1,24 @@
+# T1 — Elder sage NPC
+character:
+  name: elder
+  description: "old man, long white beard, wise eyes, tattered robes"
+  tier: t1
+
+generation:
+  source: generate
+  quality: turbo
+  seed: 77
+  prompt: >
+    90s OVA anime cel of an elderly man in his seventies, long flowing white beard,
+    deep wise eyes with slight wrinkles, wearing tattered earth-tone robes with
+    a wooden staff. Thin build, slightly hunched posture. Clean white background.
+    Cel-shaded animation, warm earth tone palette.
+
+packages:
+  portraits:
+    emotions: [neutral, happy, angry, sad]
+
+  sprites:
+    outfit: default
+    directions: [front]
+    static: true

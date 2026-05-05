@@ -10,6 +10,10 @@ from build_v2.stages.base import Stage, StageResult
 class SheetStage(Stage):
     """Generate VNCCS character sheet from the approved character image.
 
+    Face refinement strategy (packages.sheet.face_refinement):
+      - "skip" (default): No post-processing on the sheet.
+      - "facedetailer": Run Z-Image FaceDetailer pass on the sheet after generation.
+
     Uses VNCCS Step 1.1 (Clone Existing Character) API workflow.
     Uploads approved.png → runs VNCCS Clone → saves character sheet.
     """
@@ -30,7 +34,31 @@ class SheetStage(Stage):
         sheet_dir = self.ctx.sheet_dir
         return sheet_dir.exists() and bool(list(sheet_dir.glob("*.png")))
 
+    # ── Strategy resolution ────────────────────────────────────────────────
+
+    def _resolve_face_refinement(self) -> str:
+        """Read face_refinement strategy from YAML, default to skip."""
+        sheet_pkg = self.ctx.character_data.get("packages", {}).get("sheet", {})
+        if not sheet_pkg:
+            sheet_pkg = self.ctx.character_data.get("sheet", {})
+            if isinstance(sheet_pkg, dict):
+                return sheet_pkg.get("face_refinement", "skip")
+        return sheet_pkg.get("face_refinement", "skip")
+
+    # ── Run dispatch ───────────────────────────────────────────────────────
+
     def run(self, state: dict) -> StageResult:
+        result = self._generate_sheet()
+
+        # Optional post-processing: face refinement
+        if result.status == "complete" and self._resolve_face_refinement() == "facedetailer":
+            result = self._refine_faces(result)
+
+        return result
+
+    # ── Sheet generation ───────────────────────────────────────────────────
+
+    def _generate_sheet(self) -> StageResult:
         ctx = self.ctx
 
         if not ctx.approved_image.exists():
@@ -83,5 +111,18 @@ class SheetStage(Stage):
         return StageResult(
             status="complete",
             artifacts=artifacts,
-            meta={"source": "vnccs_step11_clone"},
+            meta={"source": "vnccs_step11_clone", "face_refinement": "skip"},
         )
+
+    # ── Face refinement ────────────────────────────────────────────────────
+
+    def _refine_faces(self, sheet_result: StageResult) -> StageResult:
+        """Run Z-Image FaceDetailer pass on generated sheet images.
+
+        TODO: Implement FaceDetailer workflow wiring. Needs a workflow JSON
+        that loads the sheet image, runs FaceDetailer with Z-Image Turbo
+        model/clip/vae, and saves the refined output.
+        """
+        print("  [WARN] FaceDetailer not yet implemented, skipping face refinement")
+        sheet_result.meta["face_refinement"] = "skipped_not_implemented"
+        return sheet_result

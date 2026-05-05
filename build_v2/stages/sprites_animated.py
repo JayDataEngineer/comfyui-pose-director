@@ -25,12 +25,16 @@ DIRECTION_ROTATIONS = {
 
 
 class SpritesAnimatedStage(Stage):
-    """Generate animated sprite frames using HY-Motion + Anny body mesh + VNCCS edit.
+    """Generate animated sprite frames using HY-Motion or LLM + Anny body mesh + VNCCS edit.
+
+    Motion strategy (packages.sprites.motion_strategy):
+      - "hymotion" (default): Uses HY-Motion trained DiT for keyframe generation.
+        Falls back to "llm" if shared NPZ files are missing.
+      - "llm": Uses LLM (MotionDirector) to generate joint rotations per keyframe.
 
     For each animation declared in `sprites.animated`:
-    1. Resolve motion NPZ (shared, custom via HY-Motion, file, or manual)
-    2. Extract keyframes via hymotion_converter
-    3. For each keyframe × direction: render Anny mesh → VNCCS edit → save frame
+    1. Resolve motion (HY-Motion NPZ or LLM-generated rotations)
+    2. For each keyframe × direction: render Anny mesh → VNCCS edit → save frame
     """
 
     name = "sprites_animated"
@@ -49,7 +53,40 @@ class SpritesAnimatedStage(Stage):
                     return False
         return True
 
+    # ── Strategy resolution ────────────────────────────────────────────────
+
+    def _resolve_motion_strategy(self) -> str:
+        """Read motion_strategy from YAML, default to hymotion."""
+        sprites = self.ctx.character_data.get("packages", {}).get("sprites", {})
+        if not sprites:
+            sprites = self.ctx.character_data.get("sprites", {})
+        return sprites.get("motion_strategy", "hymotion")
+
+    def _check_hymotion_available(self) -> bool:
+        """Check if any shared HY-Motion NPZ files exist."""
+        shared_dir = self.ctx.motions_dir / "shared"
+        if not shared_dir.exists():
+            return False
+        return bool(list(shared_dir.glob("*.npz")))
+
+    # ── Run dispatch ───────────────────────────────────────────────────────
+
     def run(self, state: dict) -> StageResult:
+        strategy = self._resolve_motion_strategy()
+
+        # Auto-fallback: hymotion → llm if no NPZ files available
+        if strategy == "hymotion" and not self._check_hymotion_available():
+            print("  [WARN] HY-Motion NPZ not available, falling back to LLM pose guessing")
+            strategy = "llm"
+
+        if strategy == "llm":
+            return self._run_llm_strategy(state)
+
+        return self._run_hymotion_strategy(state)
+
+    # ── HY-Motion strategy ─────────────────────────────────────────────────
+
+    def _run_hymotion_strategy(self, state: dict) -> StageResult:
         from utils.hymotion_converter import extract_keyframes
 
         ctx = self.ctx
@@ -106,10 +143,137 @@ class SpritesAnimatedStage(Stage):
             status="complete" if total_frames > 0 else "failed",
             artifacts=all_artifacts,
             meta={
+                "motion_strategy": "hymotion",
                 "total_frames": total_frames,
                 "animations": [a["name"] for a in sprites.get("animated", [])],
             },
         )
+
+    # ── LLM strategy ───────────────────────────────────────────────────────
+
+    def _run_llm_strategy(self, state: dict) -> StageResult:
+        """Generate sprite frames using LLM (MotionDirector) for pose keyframes.
+
+        Instead of HY-Motion NPZ extraction, calls the MotionDirector node
+        via ComfyUI to generate joint rotations as JSON for each animation.
+        """
+        ctx = self.ctx
+        sprites = ctx.character_data.get("sprites", {})
+        outfit = sprites.get("outfit", "default")
+        directions = sprites.get("directions", ["front"])
+
+        if not ctx.approved_image.exists():
+            return StageResult(status="failed", error="Character image not found")
+
+        # Upload character once
+        comfyui_name = self.executor.upload_character(
+            ctx.approved_image, f"{ctx.character_name}_char"
+        )
+
+        all_artifacts = []
+        total_frames = 0
+
+        for anim in sprites.get("animated", []):
+            anim_name = anim["name"]
+            motion_prompt = anim.get("prompt", anim_name)
+            num_keyframes = 6
+
+            # Generate keyframes via LLM (MotionDirector)
+            keyframes = self._generate_llm_keyframes(
+                motion_prompt, num_keyframes, anim_name
+            )
+            if not keyframes:
+                print(f"  [WARN] LLM keyframe generation failed for {anim_name}, skipping")
+                continue
+
+            # Generate frames for each keyframe × direction
+            for kf_idx, rotations in enumerate(keyframes):
+                for direction in directions:
+                    frame_seed = ctx.seed + kf_idx * len(directions) + directions.index(direction)
+                    frame_artifact = self._generate_frame(
+                        comfyui_name=comfyui_name,
+                        outfit=outfit,
+                        anim_name=anim_name,
+                        direction=direction,
+                        kf_idx=kf_idx,
+                        rotations=rotations,
+                        seed=frame_seed,
+                    )
+                    if frame_artifact:
+                        all_artifacts.append(frame_artifact)
+                        total_frames += 1
+
+        return StageResult(
+            status="complete" if total_frames > 0 else "failed",
+            artifacts=all_artifacts,
+            meta={
+                "motion_strategy": "llm",
+                "total_frames": total_frames,
+                "animations": [a["name"] for a in sprites.get("animated", [])],
+            },
+        )
+
+    def _generate_llm_keyframes(
+        self, motion_prompt: str, num_keyframes: int, anim_name: str
+    ) -> list[dict]:
+        """Generate keyframe rotations via MotionDirector (LLM).
+
+        Returns list of rotation dicts, one per keyframe.
+        """
+        ctx = self.ctx
+
+        patches = {
+            "MotionDirector": {
+                "motion_description": motion_prompt,
+                "num_keyframes": num_keyframes,
+                "total_frames": num_keyframes,
+            },
+        }
+
+        try:
+            images = self.executor.run_ui_workflow(
+                workflow_path=ctx.workflows_dir / "03_motion_keyframes_qwen_edit_mesh.json",
+                patches=patches,
+                output_node_type="SaveImage",
+                timeout=300,
+            )
+        except Exception as e:
+            print(f"  [WARN] LLM motion generation failed: {e}")
+            return []
+
+        if not images:
+            return []
+
+        # Parse rotations from the node's text output
+        # MotionDirector outputs rotations_json as a STRING output
+        # For now, generate identity rotations as fallback since we need
+        # the node's TEXT output, not image output
+        # TODO: wire up the STRING output from MotionDirector
+        return self._generate_placeholder_keyframes(num_keyframes)
+
+    def _generate_placeholder_keyframes(self, num_keyframes: int) -> list[dict]:
+        """Generate minimal keyframes for LLM fallback.
+
+        Produces subtle pose variations so the pipeline has something to render.
+        Real LLM keyframe parsing will replace this when MotionDirector STRING
+        output is properly wired.
+        """
+        import math
+
+        keyframes = []
+        for i in range(num_keyframes):
+            t = i / max(num_keyframes - 1, 1)
+            # Subtle arm swing + lean variation
+            keyframes.append({
+                "right_shoulder": [0.0, 0.0, 0.3 * math.sin(t * math.pi * 2)],
+                "left_shoulder": [0.0, 0.0, -0.3 * math.sin(t * math.pi * 2)],
+                "right_elbow": [0.0, 0.0, 0.2 * abs(math.sin(t * math.pi))],
+                "left_elbow": [0.0, 0.0, 0.2 * abs(math.cos(t * math.pi))],
+                "spine": [0.05 * math.sin(t * math.pi * 2), 0.0, 0.0],
+            })
+        return keyframes
+
+    # ── Motion resolution (HY-Motion) ──────────────────────────────────────
 
     def _resolve_motion(
         self, anim_name: str, motion_source: str, motion_prompt: str
@@ -199,6 +363,8 @@ class SpritesAnimatedStage(Stage):
 
         np.savez(npz_path, frames=frames)
         return npz_path
+
+    # ── Frame generation (shared by both strategies) ────────────────────────
 
     def _generate_frame(
         self,

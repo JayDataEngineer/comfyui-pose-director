@@ -10,6 +10,11 @@ from build_v2.stages.base import Stage, StageResult
 class SpritesStaticStage(Stage):
     """Generate static sprite sheet from character via VNCCS SpriteCreator.
 
+    Body reference strategy (packages.sprites.body_reference):
+      - "anny" (default): Uses the existing VNCCS Step 4 workflow with Anny body mesh.
+      - "trellis": Uses TRELLIS-generated 3D model for pose reference.
+        Auto-falls back to "anny" if TRELLIS stage did not complete.
+
     Uses VNCCS Step 4 API workflow. Takes the VNCCS character name
     and produces a full sprite sheet (all directions in one image).
     """
@@ -29,7 +34,33 @@ class SpritesStaticStage(Stage):
         static_dir = self.ctx.sprites_dir / "static"
         return static_dir.exists() and bool(list(static_dir.glob("*.png")))
 
+    # ── Strategy resolution ────────────────────────────────────────────────
+
+    def _resolve_body_reference(self) -> str:
+        """Read body_reference strategy from YAML, default to anny."""
+        sprites = self.ctx.character_data.get("packages", {}).get("sprites", {})
+        return sprites.get("body_reference", "anny")
+
+    # ── Run dispatch ───────────────────────────────────────────────────────
+
     def run(self, state: dict) -> StageResult:
+        strategy = self._resolve_body_reference()
+
+        # Auto-fallback: trellis → anny if trellis stage didn't complete
+        if strategy == "trellis":
+            trellis_state = state.get("stages", {}).get("trellis", {})
+            if trellis_state.get("status") != "complete":
+                print("  [WARN] TRELLIS not complete, falling back to Anny body mesh")
+                strategy = "anny"
+
+        if strategy == "trellis":
+            return self._run_with_trellis(state)
+        else:
+            return self._run_with_anny(state)
+
+    # ── Anny strategy (current behavior) ───────────────────────────────────
+
+    def _run_with_anny(self, state: dict) -> StageResult:
         ctx = self.ctx
         sprites = ctx.character_data.get("packages", {}).get("sprites", {})
         outfit = sprites.get("outfit", "default")
@@ -76,5 +107,18 @@ class SpritesStaticStage(Stage):
         return StageResult(
             status="complete",
             artifacts=artifacts,
-            meta={"outfit": outfit, "source": "vnccs_step4_sprites"},
+            meta={"outfit": outfit, "body_reference": "anny", "source": "vnccs_step4_sprites"},
+        )
+
+    # ── TRELLIS strategy (stub) ────────────────────────────────────────────
+
+    def _run_with_trellis(self, state: dict) -> StageResult:
+        """Use TRELLIS-generated 3D model for sprite pose reference.
+
+        TODO: Implement GLB loading + multi-angle rendering pipeline.
+        Requires a GLB renderer that produces 2D images at specified angles.
+        """
+        raise NotImplementedError(
+            "TRELLIS body reference strategy not yet implemented. "
+            "Use body_reference: anny (default) for now."
         )

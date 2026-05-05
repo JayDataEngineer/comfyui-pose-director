@@ -18,6 +18,9 @@ VALID_EMOTIONS = {
 
 VALID_DIRECTIONS = {"front", "back", "left", "right"}
 VALID_MOTION_SOURCES = {"shared", "custom", "manual", "file"}
+VALID_MOTION_STRATEGIES = {"hymotion", "llm"}
+VALID_BODY_REFERENCES = {"anny", "trellis"}
+VALID_FACE_REFINEMENTS = {"skip", "facedetailer"}
 VALID_QUALITIES = {"turbo", "base"}
 
 TIER_ORDER = {"t0": 0, "t1": 1, "t1.5": 2, "t2": 3, "t3": 4}
@@ -220,3 +223,16 @@ def validate_character(data: dict, path: Path):
     invalid_emotions = set(emotions) - VALID_EMOTIONS
     if invalid_emotions:
         raise ValueError(f"{path}: invalid emotions: {invalid_emotions}")
+
+    # Strategy validation
+    sprites_pkg = _pkg(data, "sprites") or {}
+    ms = sprites_pkg.get("motion_strategy", "hymotion")
+    if ms not in VALID_MOTION_STRATEGIES:
+        raise ValueError(f"{path}: sprites.motion_strategy must be one of {VALID_MOTION_STRATEGIES}")
+    br = sprites_pkg.get("body_reference", "anny")
+    if br not in VALID_BODY_REFERENCES:
+        raise ValueError(f"{path}: sprites.body_reference must be one of {VALID_BODY_REFERENCES}")
+    sheet_pkg = _pkg(data, "sheet") or {}
+    fr = sheet_pkg.get("face_refinement", "skip")
+    if fr not in VALID_FACE_REFINEMENTS:
+        raise ValueError(f"{path}: sheet.face_refinement must be one of {VALID_FACE_REFINEMENTS}")

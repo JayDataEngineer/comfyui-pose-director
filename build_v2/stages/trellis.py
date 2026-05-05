@@ -62,6 +62,11 @@ class TrellisStage(Stage):
 
         except ImportError:
             return StageResult(status="failed", error="requests library not available")
+        except requests.ConnectionError:
+            return StageResult(
+                status="skipped",
+                error="TRELLIS service unreachable — downstream stages will use fallback",
+            )
         except Exception as e:
             return StageResult(status="failed", error=f"TRELLIS service error: {e}")
 

@@ -54,18 +54,69 @@ class LoraStage(Stage):
                 output_node_id=self._SAVE_NODE,
                 timeout=600,
             )
-        except Exception:
-            # DatasetGenerator returns STRING (path), not IMAGE — may fail on output parsing.
-            # The actual dataset is in VNCCS's output directory on the ComfyUI server.
-            pass
+        except Exception as e:
+            return StageResult(status="failed", error=f"LoRA dataset generation failed: {e}")
 
-        # DatasetGenerator writes to VNCCS base_output_dir/{character}/lora/
-        # TODO: fetch the generated dataset from ComfyUI server.
+        # Fetch the generated dataset from ComfyUI output directory
+        self._fetch_dataset(ctx, lora_dir)
 
         artifacts = [str(p.relative_to(ctx.output_dir)) for p in lora_dir.rglob("*") if p.is_file()]
 
         return StageResult(
-            status="complete" if artifacts else "skipped",
+            status="complete" if artifacts else "failed",
             artifacts=artifacts,
             meta={"source": "vnccs_step5_lora", "character": VNCCS_CHAR_NAME},
         )
+
+    def _fetch_dataset(self, ctx, lora_dir: "Path") -> None:
+        """Download generated LoRA dataset files from ComfyUI output.
+
+        VNCCS DatasetGenerator saves files to ComfyUI's output directory.
+        We download them to our local output dir via the /view API.
+        """
+        import requests
+        from pathlib import Path
+
+        url = ctx.comfyui_url.rstrip("/")
+        try:
+            # List files in ComfyUI output directory for this character
+            resp = requests.get(
+                f"{url}/view",
+                params={"type": "output"},
+                timeout=30,
+            )
+            # The /view endpoint serves individual files, not listings.
+            # VNCCS DatasetGenerator typically outputs to a known path pattern.
+            # Try to fetch from the standard VNCCS output location.
+            resp = requests.get(
+                f"{url}/api/list",
+                params={"type": "output"},
+                timeout=30,
+            )
+            if resp.status_code != 200:
+                print("  [WARN] Could not list ComfyUI output directory")
+                return
+
+            listing = resp.json()
+            # Find files matching the character's LoRA dataset pattern
+            prefix = f"PoseDirector/{ctx.character_name}"
+            for item in listing.get("files", []):
+                # VNCCS outputs are typically under the output root
+                filename = item.get("name", "") if isinstance(item, dict) else str(item)
+                if not filename:
+                    continue
+
+                # Download matching files
+                for suffix in (".png", ".jpg", ".txt", ".caption"):
+                    if filename.endswith(suffix) and ctx.character_name in filename:
+                        dl = requests.get(
+                            f"{url}/view",
+                            params={"filename": filename, "type": "output"},
+                            timeout=30,
+                        )
+                        if dl.status_code == 200:
+                            out_path = lora_dir / filename.rsplit("/", 1)[-1]
+                            out_path.write_bytes(dl.content)
+
+        except Exception as e:
+            print(f"  [WARN] LoRA dataset fetch failed: {e}")

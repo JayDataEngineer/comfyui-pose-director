@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from pose_director_root.utils.mesh_renderer import render_mesh, render_mesh_pil
+from pose_director_root.utils.mesh_renderer import render_mesh, render_mesh_pil, load_glb, render_glb
 
 
 # Simple test mesh: a triangle with Z-up (matching Anny convention)
@@ -89,3 +89,63 @@ class TestRenderMeshAuto:
         verts, faces = _flat_triangle()
         img = render_mesh(verts, faces, width=64, height=64, backend="auto")
         assert img.shape == (64, 64, 3)
+
+
+class TestLoadGLB:
+    """Tests for GLB loading via trimesh."""
+
+    def test_load_glb_returns_vertices_and_faces(self, tmp_path):
+        """load_glb should return (vertices, faces) numpy arrays."""
+        import trimesh
+        verts, faces = _cube_mesh()
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+        glb_path = tmp_path / "test.glb"
+        mesh.export(str(glb_path), file_type="glb")
+
+        loaded_verts, loaded_faces = load_glb(glb_path)
+        assert loaded_verts.shape[1] == 3
+        assert loaded_faces.shape[1] == 3
+        assert loaded_verts.dtype == np.float64
+        assert loaded_faces.dtype == np.int32
+        # Same triangle count (trimesh may merge or split, just check we have faces)
+        assert len(loaded_faces) > 0
+
+    def test_load_glb_file_not_found(self):
+        """load_glb should raise for missing files."""
+        with pytest.raises(Exception):
+            load_glb("/nonexistent/path/model.glb")
+
+
+class TestRenderGLB:
+    """Tests for the GLB rendering convenience function."""
+
+    def test_render_glb_produces_image(self, tmp_path):
+        """render_glb should return (H, W, 3) uint8 array."""
+        import trimesh
+        verts, faces = _cube_mesh()
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+        glb_path = tmp_path / "test.glb"
+        mesh.export(str(glb_path), file_type="glb")
+
+        img = render_glb(glb_path, width=128, height=128, backend="pil")
+        assert img.shape == (128, 128, 3)
+        assert img.dtype == np.uint8
+
+    def test_render_glb_with_rotation(self, tmp_path):
+        """render_glb should produce visible mesh and accept rotation parameter."""
+        import trimesh
+        # Use an asymmetric mesh so rotation produces different results
+        verts = np.array([
+            [0, 0, 0], [3, 0, 0], [0, 0, 2],  # wide base, short height
+        ], dtype=np.float64)
+        faces = np.array([[0, 1, 2]], dtype=np.int32)
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+        glb_path = tmp_path / "test.glb"
+        mesh.export(str(glb_path), file_type="glb")
+
+        img_front = render_glb(glb_path, width=256, height=256, backend="pil", model_rotation_y=0.0)
+        # Should have visible mesh pixels
+        assert (img_front < 250).any(), "Render should have visible mesh"
+        # Rotation parameter accepted without error
+        img_side = render_glb(glb_path, width=256, height=256, backend="pil", model_rotation_y=90.0)
+        assert img_side.shape == (256, 256, 3)

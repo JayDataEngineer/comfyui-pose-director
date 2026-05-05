@@ -7,6 +7,7 @@ Provides a PIL fallback renderer for environments without GPU/OpenGL support.
 """
 
 import numpy as np
+from pathlib import Path
 from typing import Optional
 
 
@@ -216,3 +217,62 @@ def render_mesh(
         return render_mesh_pyrender(vertices, faces, width, height)
     else:
         return render_mesh_pil(vertices, faces, width, height)
+
+
+def load_glb(glb_path: str | Path) -> tuple[np.ndarray, np.ndarray]:
+    """Load a GLB/GLTF file and return vertices and faces.
+
+    Handles multi-mesh GLBs by concatenating all sub-meshes.
+    Trellis outputs single-mesh GLBs, but this is defensive.
+
+    Args:
+        glb_path: Path to .glb or .gltf file.
+
+    Returns:
+        (vertices, faces) as (N, 3) float64 and (M, 3) int32 arrays.
+    """
+    import trimesh
+
+    scene = trimesh.load(str(glb_path), force="mesh")
+    if isinstance(scene, trimesh.Trimesh):
+        return np.asarray(scene.vertices, dtype=np.float64), np.asarray(scene.faces, dtype=np.int32)
+
+    # Multi-mesh: concatenate
+    all_verts = []
+    all_faces = []
+    offset = 0
+    for geom in scene.geometry.values():
+        if isinstance(geom, trimesh.Trimesh):
+            all_verts.append(np.asarray(geom.vertices, dtype=np.float64))
+            all_faces.append(np.asarray(geom.faces, dtype=np.int32) + offset)
+            offset += len(geom.vertices)
+
+    if not all_verts:
+        raise ValueError(f"No triangle meshes found in {glb_path}")
+
+    return np.concatenate(all_verts), np.concatenate(all_faces)
+
+
+def render_glb(
+    glb_path: str | Path,
+    width: int = 1024,
+    height: int = 1024,
+    backend: str = "auto",
+    model_rotation_y: float = 0.0,
+) -> np.ndarray:
+    """Load a GLB file and render it to a 2D image.
+
+    Convenience wrapper combining load_glb + render_mesh.
+
+    Args:
+        glb_path: Path to .glb file.
+        width: Output image width.
+        height: Output image height.
+        backend: "pyrender", "pil", or "auto".
+        model_rotation_y: Rotation in degrees. 0=front, 90=right, 180=back, 270=left.
+
+    Returns:
+        (H, W, 3) uint8 numpy array.
+    """
+    vertices, faces = load_glb(glb_path)
+    return render_mesh(vertices, faces, width, height, backend=backend, model_rotation_y=model_rotation_y)

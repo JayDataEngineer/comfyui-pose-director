@@ -43,7 +43,7 @@ class SpritesAnimatedStage(Stage):
 
     def is_complete(self, state: dict) -> bool:
         """Check if all animated sprite frames exist."""
-        sprites = self.ctx.character_data.get("sprites", {})
+        sprites = self.ctx.pkg("sprites")
         for anim in sprites.get("animated", []):
             anim_name = anim["name"]
             outfit = sprites.get("outfit", "default")
@@ -59,6 +59,10 @@ class SpritesAnimatedStage(Stage):
         """Read motion_strategy from YAML, default to hymotion."""
         return self.ctx.pkg("sprites").get("motion_strategy", "hymotion")
 
+    def _resolve_body_reference(self) -> str:
+        """Read body_reference strategy from YAML, default to anny."""
+        return self.ctx.pkg("sprites").get("body_reference", "anny")
+
     def _check_hymotion_available(self) -> bool:
         """Check if any shared HY-Motion NPZ files exist."""
         shared_dir = self.ctx.motions_dir / "shared"
@@ -69,25 +73,33 @@ class SpritesAnimatedStage(Stage):
     # ── Run dispatch ───────────────────────────────────────────────────────
 
     def run(self, state: dict) -> StageResult:
-        strategy = self._resolve_motion_strategy()
+        motion = self._resolve_motion_strategy()
+        body = self._resolve_body_reference()
 
         # Auto-fallback: hymotion → llm if no NPZ files available
-        if strategy == "hymotion" and not self._check_hymotion_available():
+        if motion == "hymotion" and not self._check_hymotion_available():
             print("  [WARN] HY-Motion NPZ not available, falling back to LLM pose guessing")
-            strategy = "llm"
+            motion = "llm"
 
-        if strategy == "llm":
-            return self._run_llm_strategy(state)
+        # Auto-fallback: trellis → anny if trellis stage didn't complete
+        if body == "trellis":
+            trellis_state = state.get("stages", {}).get("trellis", {})
+            if trellis_state.get("status") != "complete":
+                print("  [WARN] TRELLIS not complete, falling back to Anny body mesh")
+                body = "anny"
 
-        return self._run_hymotion_strategy(state)
+        if motion == "llm":
+            return self._run_llm_strategy(state, body)
+
+        return self._run_hymotion_strategy(state, body)
 
     # ── HY-Motion strategy ─────────────────────────────────────────────────
 
-    def _run_hymotion_strategy(self, state: dict) -> StageResult:
+    def _run_hymotion_strategy(self, state: dict, body: str = "anny") -> StageResult:
         from utils.hymotion_converter import extract_keyframes
 
         ctx = self.ctx
-        sprites = ctx.character_data.get("sprites", {})
+        sprites = ctx.pkg("sprites")
         outfit = sprites.get("outfit", "default")
         directions = sprites.get("directions", ["front"])
 
@@ -98,6 +110,11 @@ class SpritesAnimatedStage(Stage):
         comfyui_name = self.executor.upload_character(
             ctx.approved_image, f"{ctx.character_name}_char"
         )
+
+        # For Trellis body, preload the GLB
+        glb_path = None
+        if body == "trellis":
+            glb_path = self._resolve_trellis_glb(state)
 
         all_artifacts = []
         total_frames = 0
@@ -123,15 +140,26 @@ class SpritesAnimatedStage(Stage):
             for kf_idx, rotations in enumerate(keyframes):
                 for direction in directions:
                     frame_seed = ctx.seed + kf_idx * len(directions) + directions.index(direction)
-                    frame_artifact = self._generate_frame(
-                        comfyui_name=comfyui_name,
-                        outfit=outfit,
-                        anim_name=anim_name,
-                        direction=direction,
-                        kf_idx=kf_idx,
-                        rotations=rotations,
-                        seed=frame_seed,
-                    )
+                    if body == "trellis" and glb_path:
+                        frame_artifact = self._generate_frame_trellis(
+                            comfyui_name=comfyui_name,
+                            glb_path=glb_path,
+                            outfit=outfit,
+                            anim_name=anim_name,
+                            direction=direction,
+                            kf_idx=kf_idx,
+                            seed=frame_seed,
+                        )
+                    else:
+                        frame_artifact = self._generate_frame(
+                            comfyui_name=comfyui_name,
+                            outfit=outfit,
+                            anim_name=anim_name,
+                            direction=direction,
+                            kf_idx=kf_idx,
+                            rotations=rotations,
+                            seed=frame_seed,
+                        )
                     if frame_artifact:
                         all_artifacts.append(frame_artifact)
                         total_frames += 1
@@ -141,6 +169,7 @@ class SpritesAnimatedStage(Stage):
             artifacts=all_artifacts,
             meta={
                 "motion_strategy": "hymotion",
+                "body_reference": body,
                 "total_frames": total_frames,
                 "animations": [a["name"] for a in sprites.get("animated", [])],
             },
@@ -148,14 +177,14 @@ class SpritesAnimatedStage(Stage):
 
     # ── LLM strategy ───────────────────────────────────────────────────────
 
-    def _run_llm_strategy(self, state: dict) -> StageResult:
+    def _run_llm_strategy(self, state: dict, body: str = "anny") -> StageResult:
         """Generate sprite frames using LLM (MotionDirector) for pose keyframes.
 
         Instead of HY-Motion NPZ extraction, calls the MotionDirector node
         via ComfyUI to generate joint rotations as JSON for each animation.
         """
         ctx = self.ctx
-        sprites = ctx.character_data.get("sprites", {})
+        sprites = ctx.pkg("sprites")
         outfit = sprites.get("outfit", "default")
         directions = sprites.get("directions", ["front"])
 
@@ -215,8 +244,13 @@ class SpritesAnimatedStage(Stage):
     ) -> list[dict]:
         """Generate keyframe rotations via MotionDirector (LLM).
 
-        Returns list of rotation dicts, one per keyframe.
+        Submits the workflow and parses MotionDirector's STRING output
+        to extract JSON rotations. Falls back to identity poses only
+        if text parsing fails.
         """
+        from pipeline.ui_to_api import load_ui_workflow, patch_ui_workflow, convert_ui_to_api
+        from pipeline.comfyui_client import submit_workflow, get_output_text
+
         ctx = self.ctx
 
         patches = {
@@ -228,47 +262,61 @@ class SpritesAnimatedStage(Stage):
         }
 
         try:
-            images = self.executor.run_ui_workflow(
-                workflow_path=ctx.workflows_dir / "03_motion_keyframes_qwen_edit_mesh.json",
-                patches=patches,
-                output_node_type="SaveImage",
-                timeout=300,
-            )
+            wf = load_ui_workflow(str(ctx.workflows_dir / "03_motion_keyframes_qwen_edit_mesh.json"))
+            patch_ui_workflow(wf, patches)
+
+            # Find MotionDirector node ID to read its text output
+            md_node = next((n for n in wf["nodes"] if n["type"] == "MotionDirector"), None)
+            if not md_node:
+                print("  [WARN] No MotionDirector node in workflow")
+                return []
+
+            api = convert_ui_to_api(wf)
+            result = submit_workflow(api, timeout=300, base_url=ctx.comfyui_url)
+
+            # Get STRING output from MotionDirector node
+            md_id = str(md_node["id"])
+            text_output = get_output_text(result["outputs"], md_id, base_url=ctx.comfyui_url)
+
+            if not text_output:
+                print("  [WARN] MotionDirector returned no text output")
+                return []
+
+            # Parse the JSON rotations
+            return self._parse_rotations_json(text_output, num_keyframes)
+
         except Exception as e:
             print(f"  [WARN] LLM motion generation failed: {e}")
             return []
 
-        if not images:
+    def _parse_rotations_json(self, text: str, num_keyframes: int) -> list[dict]:
+        """Parse rotation JSON from MotionDirector text output.
+
+        Handles: direct JSON array, markdown-wrapped, trailing commas.
+        """
+        from utils.api_client import parse_llm_json
+
+        try:
+            parsed = parse_llm_json(text)
+        except Exception:
+            print(f"  [WARN] Could not parse MotionDirector output as JSON")
             return []
 
-        # Parse rotations from the node's text output
-        # MotionDirector outputs rotations_json as a STRING output
-        # For now, generate identity rotations as fallback since we need
-        # the node's TEXT output, not image output
-        # TODO: wire up the STRING output from MotionDirector
-        return self._generate_placeholder_keyframes(num_keyframes)
+        if isinstance(parsed, list):
+            return parsed[:num_keyframes]
+        if isinstance(parsed, dict):
+            # Single keyframe dict
+            return [parsed]
+        if isinstance(parsed, str):
+            # Double-encoded
+            try:
+                inner = json.loads(parsed)
+                if isinstance(inner, list):
+                    return inner[:num_keyframes]
+            except Exception:
+                pass
 
-    def _generate_placeholder_keyframes(self, num_keyframes: int) -> list[dict]:
-        """Generate minimal keyframes for LLM fallback.
-
-        Produces subtle pose variations so the pipeline has something to render.
-        Real LLM keyframe parsing will replace this when MotionDirector STRING
-        output is properly wired.
-        """
-        import math
-
-        keyframes = []
-        for i in range(num_keyframes):
-            t = i / max(num_keyframes - 1, 1)
-            # Subtle arm swing + lean variation
-            keyframes.append({
-                "right_shoulder": [0.0, 0.0, 0.3 * math.sin(t * math.pi * 2)],
-                "left_shoulder": [0.0, 0.0, -0.3 * math.sin(t * math.pi * 2)],
-                "right_elbow": [0.0, 0.0, 0.2 * abs(math.sin(t * math.pi))],
-                "left_elbow": [0.0, 0.0, 0.2 * abs(math.cos(t * math.pi))],
-                "spine": [0.05 * math.sin(t * math.pi * 2), 0.0, 0.0],
-            })
-        return keyframes
+        return []
 
     # ── Motion resolution (HY-Motion) ──────────────────────────────────────
 
@@ -294,7 +342,7 @@ class SpritesAnimatedStage(Stage):
             return self._run_hymotion(motion_prompt, anim_name)
 
         elif motion_source == "file":
-            npz_path = Path(ctx.character_data.get("sprites", {})
+            npz_path = Path(ctx.pkg("sprites")
                            .get("animated", [{}])[0].get("path", ""))
             return npz_path if npz_path.exists() else None
 
@@ -353,7 +401,7 @@ class SpritesAnimatedStage(Stage):
 
         # Get manual frames from YAML
         frames = []
-        for anim in ctx.character_data.get("sprites", {}).get("animated", []):
+        for anim in ctx.pkg("sprites").get("animated", []):
             if anim["name"] == anim_name:
                 frames = anim.get("frames", [])
                 break
@@ -409,5 +457,96 @@ class SpritesAnimatedStage(Stage):
 
         except Exception as e:
             print(f"  [WARN] Frame {kf_idx+1} {direction} failed: {e}")
+
+        return None
+
+    # ── Trellis body reference helpers ────────────────────────────────────
+
+    def _resolve_trellis_glb(self, state: dict) -> Path | None:
+        """Find the Trellis GLB from the trellis stage artifacts."""
+        trellis_artifacts = state.get("stages", {}).get("trellis", {}).get("artifacts", [])
+        for art in trellis_artifacts:
+            if art.endswith(".glb"):
+                glb_path = self.ctx.output_dir / art
+                if glb_path.exists():
+                    return glb_path
+        return None
+
+    def _generate_frame_trellis(
+        self,
+        comfyui_name: str,
+        glb_path: Path,
+        outfit: str,
+        anim_name: str,
+        direction: str,
+        kf_idx: int,
+        seed: int,
+    ) -> str | None:
+        """Generate a sprite frame using Trellis 3D model instead of Anny.
+
+        Renders the Trellis GLB from the specified viewing angle, uploads it,
+        and feeds it through the VNCCS sprite pipeline.
+        """
+        import io
+        from PIL import Image
+        from utils.mesh_renderer import render_glb
+        from pipeline.comfyui_client import upload_image
+        from pipeline.ui_to_api import load_ui_workflow, convert_ui_to_api
+        from pipeline.comfyui_client import submit_workflow, get_output_images
+
+        ctx = self.ctx
+        rotation_y = DIRECTION_ROTATIONS.get(direction, 0.0)
+
+        # Render Trellis GLB from this viewing angle
+        mesh_image = render_glb(
+            glb_path,
+            width=1024,
+            height=1024,
+            model_rotation_y=rotation_y,
+        )
+
+        # Upload rendered mesh to ComfyUI
+        img = Image.fromarray(mesh_image)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        mesh_name = f"{ctx.character_name}_trellis_{direction}_f{kf_idx}"
+        upload_image(buf.getvalue(), f"{mesh_name}.png", "PoseDirector", base_url=ctx.comfyui_url)
+        comfyui_mesh = f"PoseDirector/{mesh_name}.png"
+
+        # Load workflow, replace BodyMeshRenderer (node 2) with LoadImage
+        wf = load_ui_workflow(str(ctx.workflows_dir / "05_sprite_bodymesh_edit.json"))
+        body_node = next(n for n in wf["nodes"] if n["id"] == 2)
+        body_node["type"] = "LoadImage"
+        body_node["widgets_values"] = [comfyui_mesh, "image"]
+        body_node.pop("properties", None)
+
+        # Set character image on original LoadImage (node 1)
+        for n in wf["nodes"]:
+            if n["type"] == "LoadImage" and n["id"] == 1:
+                n["widgets_values"] = [comfyui_name, "image"]
+
+        # Set seed on KSampler
+        for n in wf["nodes"]:
+            if n["type"] == "KSampler":
+                if not n.get("widgets_values"):
+                    n["widgets_values"] = [seed, "randomize", 20, 7.0, "euler", "simple", 1.0]
+                else:
+                    n["widgets_values"][0] = seed
+
+        try:
+            api = convert_ui_to_api(wf)
+            result = submit_workflow(api, timeout=300, base_url=ctx.comfyui_url)
+            save_node = next(n for n in wf["nodes"] if n["type"] == "SaveImage")
+            images = get_output_images(result["outputs"], save_node["id"], base_url=ctx.comfyui_url)
+
+            if images:
+                frame_dir = ctx.sprites_dir / outfit / "normal" / anim_name / direction
+                frame_dir.mkdir(parents=True, exist_ok=True)
+                frame_path = frame_dir / f"frame_{kf_idx + 1:03d}.png"
+                frame_path.write_bytes(images[0])
+                return str(frame_path.relative_to(ctx.output_dir))
+
+        except Exception as e:
+            print(f"  [WARN] Trellis frame {kf_idx+1} {direction} failed: {e}")
 
         return None

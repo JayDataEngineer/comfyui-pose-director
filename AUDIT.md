@@ -38,3 +38,19 @@ Last audit: 2026-05-05
 |---|-------|--------|----------|
 | L1 | validators.py mixes validation + tier inference + stage enablement | ⚪ Low priority | Cohesive enough for current scale |
 | L2 | Deployment overrides hardcoded in stage bodies | ✅ (covered by R2/R6) | Now constants on context |
+
+## Data Access Consistency
+
+| # | Issue | Status | Location |
+|---|-------|--------|----------|
+| A1 | `sprites_animated` used `character_data.get("sprites")` (top-level only) in 5 places while `sprites_static` correctly used `ctx.pkg("sprites")` | ✅ Fixed | All 5 locations now use `ctx.pkg("sprites")` |
+
+## Strategy Composition
+
+| # | Concern | Status | Notes |
+|---|---------|--------|-------|
+| C1 | `body_reference` only consumed by `sprites_static`, not `sprites_animated` | ❌ Gap | Both stages render a body reference — TRELLIS creates skeletons too. Animated stage should respect body_reference. |
+| C2 | `motion_strategy` only consumed by `sprites_animated`, not `sprites_static` | ❌ Gap | Static sprites also go through motion generation (pose render → QWEN edit). Both need motion data. |
+| C3 | `face_refinement` cascade to downstream stages | ✅ Natural | Sheet post-processing cascades through DAG automatically |
+| C4 | `generation.source` encapsulation | ✅ Clean | All downstream stages only depend on `approved_image` existing |
+| C5 | `video` × `sprites_animated` independence | ✅ Clean | Independent output pipelines (LTX video vs game engine frames) |

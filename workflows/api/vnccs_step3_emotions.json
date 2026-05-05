@@ -119,7 +119,7 @@
   "78": {
     "class_type": "UnetLoaderGGUF",
     "inputs": {
-      "unet_name": "qwen-image-edit-2511-Q5_0.gguf"
+      "unet_name": "Qwen-Image-Edit-2511-Q5_0.gguf"
     }
   },
   "79": {

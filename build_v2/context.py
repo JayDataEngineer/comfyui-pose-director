@@ -56,6 +56,7 @@ class BuildContext:
         seed_override: int | None = None,
         dry_run: bool = False,
         rebuild_targets: list[str] | None = None,
+        output_dir_override: Path | None = None,
     ) -> BuildContext:
         """Create a BuildContext from parsed YAML data."""
         char = data.get("character", {})
@@ -68,7 +69,7 @@ class BuildContext:
             character_data=data,
             character_name=name,
             tier=tier,
-            output_dir=project_root / "output" / name,
+            output_dir=output_dir_override or (project_root / "output" / name),
             workflows_dir=project_root / "workflows",
             api_workflows_dir=project_root / "workflows" / "api",
             motions_dir=project_root / "motions",

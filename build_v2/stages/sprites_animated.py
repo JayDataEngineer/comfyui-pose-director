@@ -294,7 +294,7 @@ class SpritesAnimatedStage(Stage):
 
         Handles: direct JSON array, markdown-wrapped, trailing commas.
         """
-        from utils.api_client import parse_llm_json
+        from utils.json_parser import parse_llm_json
 
         try:
             parsed = parse_llm_json(text)

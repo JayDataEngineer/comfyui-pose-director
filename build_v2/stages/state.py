@@ -6,8 +6,7 @@ a VNCCS instruction that applies state effects while preserving identity and pos
 
 from __future__ import annotations
 
-from pathlib import Path
-
+from build_v2.context import DEPLOYMENT_CHECKPOINT, DEPLOYMENT_RMBG_MODEL, VNCCS_CHAR_NAME
 from build_v2.stages.base import Stage, StageResult
 
 
@@ -17,10 +16,6 @@ class StateStage(Stage):
     Takes the state package (name + description) from character YAML and
     runs VNCCS QWEN edit to apply the state effect (bruises, weathering,
     damage, etc.) while keeping character identity and pose intact.
-
-    Uses the 05_sprite_bodymesh_edit.json UI workflow with a state-specific
-    VNCCS instruction, similar to how the sprite pipeline works but without
-    pose changes.
     """
 
     name = "state"
@@ -32,20 +27,13 @@ class StateStage(Stage):
     _SAVE_IMAGE_NODE = "15"
     _CHARACTER_CREATOR_NODE = "499"
 
-    # Remote deployment overrides
-    _CHECKPOINT = "sd_xl_base_1.0.safetensors"
-    _RMBG_MODEL = "BEN2"
-
     def is_complete(self, state: dict) -> bool:
         state_dir = self.ctx.output_dir / "state"
         return state_dir.exists() and bool(list(state_dir.glob("*.png")))
 
     def _get_state_package(self) -> dict:
         """Extract state package from character data."""
-        pkg = self.ctx.character_data.get("packages", {}).get("state", {})
-        if not pkg:
-            pkg = self.ctx.character_data.get("state", {})
-        return pkg
+        return self.ctx.pkg("state")
 
     def _build_instruction(self, state_name: str, state_desc: str) -> str:
         """Build VNCCS instruction for state application."""
@@ -75,7 +63,6 @@ class StateStage(Stage):
             return StageResult(status="failed", error="No sheet images found")
 
         state_dir = ctx.output_dir / "state"
-        state_dir.mkdir(parents=True, exist_ok=True)
 
         instruction = self._build_instruction(state_name, state_desc)
 
@@ -85,13 +72,10 @@ class StateStage(Stage):
             source_image, f"{ctx.character_name}_state_source"
         )
 
-        # VNCCS bug: character registered as "None" (see sheet stage)
-        vnccs_char_name = "None"
-
         patches = {
             self._LOAD_IMAGE_NODE: {"image": comfyui_name},
             self._CHARACTER_CREATOR_NODE: {
-                "existing_character": vnccs_char_name,
+                "existing_character": VNCCS_CHAR_NAME,
                 "new_character_name": ctx.character_name,
             },
             self._SAVE_IMAGE_NODE: {
@@ -105,8 +89,8 @@ class StateStage(Stage):
                 patches=patches,
                 output_node_id=self._SAVE_IMAGE_NODE,
                 timeout=1800,
-                checkpoint_override=self._CHECKPOINT,
-                rmbg_override=self._RMBG_MODEL,
+                checkpoint_override=DEPLOYMENT_CHECKPOINT,
+                rmbg_override=DEPLOYMENT_RMBG_MODEL,
             )
         except Exception as e:
             return StageResult(status="failed", error=f"State generation failed: {e}")
@@ -114,11 +98,7 @@ class StateStage(Stage):
         if not images:
             return StageResult(status="failed", error="State edit produced no output")
 
-        artifacts = []
-        for i, img_bytes in enumerate(images):
-            out_path = state_dir / f"{state_name}_{i:03d}.png"
-            out_path.write_bytes(img_bytes)
-            artifacts.append(str(out_path.relative_to(ctx.output_dir)))
+        artifacts = self._save_artifacts(images, state_dir, state_name)
 
         return StageResult(
             status="complete",

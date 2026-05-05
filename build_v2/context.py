@@ -6,6 +6,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
+# VNCCS bug: CharacterCreator ignores new_character_name parameter.
+# It always uses existing_character as the character name.
+# With existing_character="None", character is registered as "None".
+# All VNCCS stages must use this constant for character lookup.
+VNCCS_CHAR_NAME = "None"
+
+# Remote deployment overrides — models that work on Docker/remote ComfyUI.
+# ILFlatMix fails mmap on Docker, INSPYRENET needs extra package.
+DEPLOYMENT_CHECKPOINT = "sd_xl_base_1.0.safetensors"
+DEPLOYMENT_RMBG_MODEL = "BEN2"
+
+
 @dataclass
 class BuildContext:
     """Carries everything a stage needs — parsed YAML, paths, config.
@@ -67,6 +79,19 @@ class BuildContext:
             rebuild_targets=rebuild_targets or [],
             yaml_path=str(yaml_path),
         )
+
+    # ── Package access helpers ─────────────────────────────────────────────
+
+    def pkg(self, key: str) -> dict:
+        """Get a package config from `packages.*`, falling back to top-level key."""
+        pkgs = self.character_data.get("packages", {})
+        result = pkgs.get(key)
+        if result is not None:
+            return result
+        result = self.character_data.get(key)
+        return result if isinstance(result, dict) else {}
+
+    # ── Directory properties ────────────────────────────────────────────────
 
     @property
     def design_dir(self) -> Path:

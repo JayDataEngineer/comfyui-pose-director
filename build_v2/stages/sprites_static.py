@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
+from build_v2.context import DEPLOYMENT_CHECKPOINT, DEPLOYMENT_RMBG_MODEL, VNCCS_CHAR_NAME
 from build_v2.stages.base import Stage, StageResult
 
 
@@ -26,10 +25,6 @@ class SpritesStaticStage(Stage):
     _SPRITE_NODE = "1"
     _SAVE_NODE = "5"
 
-    # Remote deployment overrides (see build_v2/api_patcher.py for why)
-    _CHECKPOINT = "sd_xl_base_1.0.safetensors"  # ILFlatMix fails mmap on Docker
-    _RMBG_MODEL = "BEN2"  # RMBG-2.0 needs writeable cache, INSPYRENET needs extra pkg
-
     def is_complete(self, state: dict) -> bool:
         static_dir = self.ctx.sprites_dir / "static"
         return static_dir.exists() and bool(list(static_dir.glob("*.png")))
@@ -38,8 +33,7 @@ class SpritesStaticStage(Stage):
 
     def _resolve_body_reference(self) -> str:
         """Read body_reference strategy from YAML, default to anny."""
-        sprites = self.ctx.character_data.get("packages", {}).get("sprites", {})
-        return sprites.get("body_reference", "anny")
+        return self.ctx.pkg("sprites").get("body_reference", "anny")
 
     # ── Run dispatch ───────────────────────────────────────────────────────
 
@@ -62,19 +56,14 @@ class SpritesStaticStage(Stage):
 
     def _run_with_anny(self, state: dict) -> StageResult:
         ctx = self.ctx
-        sprites = ctx.character_data.get("packages", {}).get("sprites", {})
-        outfit = sprites.get("outfit", "default")
-
-        # VNCCS bug: CharacterCreator ignores new_character_name, uses existing_character.
-        # When existing_character="None", the character is registered as "None".
-        vnccs_char_name = "None"
+        outfit = ctx.pkg("sprites").get("outfit", "default")
 
         static_dir = ctx.sprites_dir / "static"
         static_dir.mkdir(parents=True, exist_ok=True)
 
         patches = {
             self._SPRITE_NODE: {
-                "character": vnccs_char_name,
+                "character": VNCCS_CHAR_NAME,
             },
             # filename_prefix linked to SpriteGenerator output (is_list=True → list)
             # causes SaveImage to crash with "expected str, got list"
@@ -89,8 +78,8 @@ class SpritesStaticStage(Stage):
                 patches=patches,
                 output_node_id=self._SAVE_NODE,
                 timeout=1800,  # Can be slow on first run
-                checkpoint_override=self._CHECKPOINT,
-                rmbg_override=self._RMBG_MODEL,
+                checkpoint_override=DEPLOYMENT_CHECKPOINT,
+                rmbg_override=DEPLOYMENT_RMBG_MODEL,
             )
         except Exception as e:
             return StageResult(status="failed", error=f"Sprite generation failed: {e}")
@@ -98,11 +87,7 @@ class SpritesStaticStage(Stage):
         if not images:
             return StageResult(status="failed", error="Sprites produced no output")
 
-        artifacts = []
-        for i, img_bytes in enumerate(images):
-            out_path = static_dir / f"sprite_{outfit}_{i:03d}.png"
-            out_path.write_bytes(img_bytes)
-            artifacts.append(str(out_path.relative_to(ctx.output_dir)))
+        artifacts = self._save_artifacts(images, static_dir, f"sprite_{outfit}")
 
         return StageResult(
             status="complete",

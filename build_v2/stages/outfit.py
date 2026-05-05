@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from build_v2.context import DEPLOYMENT_CHECKPOINT, DEPLOYMENT_RMBG_MODEL, VNCCS_CHAR_NAME
 from build_v2.stages.base import Stage, StageResult
 
 
@@ -20,17 +21,13 @@ class OutfitStage(Stage):
     _ASSET_NODE = "579"  # CharacterAssetSelectorQWEN
     _SAVE_NODE = "15"    # SaveImage
 
-    # Remote deployment overrides
-    _CHECKPOINT = "sd_xl_base_1.0.safetensors"
-    _RMBG_MODEL = "BEN2"
-
     def is_complete(self, state: dict) -> bool:
         outfit_dir = self.ctx.output_dir / "outfits"
         return outfit_dir.exists() and bool(list(outfit_dir.glob("*.png")))
 
     def run(self, state: dict) -> StageResult:
         ctx = self.ctx
-        outfit_pkg = ctx.character_data.get("packages", {}).get("outfit", {})
+        outfit_pkg = ctx.pkg("outfit")
         outfit_name = outfit_pkg.get("name", "")
         outfit_desc = outfit_pkg.get("description", "")
 
@@ -38,14 +35,10 @@ class OutfitStage(Stage):
             return StageResult(status="skipped", error="No outfit declared")
 
         outfit_dir = ctx.output_dir / "outfits"
-        outfit_dir.mkdir(parents=True, exist_ok=True)
-
-        # VNCCS bug: character registered as "None" (see sheet stage)
-        vnccs_char_name = "None"
 
         patches = {
             self._ASSET_NODE: {
-                "character": vnccs_char_name,
+                "character": VNCCS_CHAR_NAME,
                 "top": outfit_desc or outfit_name,
             },
             # filename_prefix linked to VNCCS_String output → list crash
@@ -60,8 +53,8 @@ class OutfitStage(Stage):
                 patches=patches,
                 output_node_id=self._SAVE_NODE,
                 timeout=1800,  # Can be slow — SeedVR2 upscale + multiple passes
-                checkpoint_override=self._CHECKPOINT,
-                rmbg_override=self._RMBG_MODEL,
+                checkpoint_override=DEPLOYMENT_CHECKPOINT,
+                rmbg_override=DEPLOYMENT_RMBG_MODEL,
             )
         except Exception as e:
             return StageResult(status="failed", error=f"Outfit generation failed: {e}")
@@ -69,11 +62,7 @@ class OutfitStage(Stage):
         if not images:
             return StageResult(status="failed", error="Outfit produced no output")
 
-        artifacts = []
-        for i, img_bytes in enumerate(images):
-            out_path = outfit_dir / f"{outfit_name}_{i:03d}.png"
-            out_path.write_bytes(img_bytes)
-            artifacts.append(str(out_path.relative_to(ctx.output_dir)))
+        artifacts = self._save_artifacts(images, outfit_dir, outfit_name)
 
         return StageResult(
             status="complete",

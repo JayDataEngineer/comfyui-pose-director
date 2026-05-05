@@ -57,10 +57,7 @@ class SpritesAnimatedStage(Stage):
 
     def _resolve_motion_strategy(self) -> str:
         """Read motion_strategy from YAML, default to hymotion."""
-        sprites = self.ctx.character_data.get("packages", {}).get("sprites", {})
-        if not sprites:
-            sprites = self.ctx.character_data.get("sprites", {})
-        return sprites.get("motion_strategy", "hymotion")
+        return self.ctx.pkg("sprites").get("motion_strategy", "hymotion")
 
     def _check_hymotion_available(self) -> bool:
         """Check if any shared HY-Motion NPZ files exist."""

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from build_v2.context import VNCCS_CHAR_NAME
 from build_v2.stages.base import Stage, StageResult
 
 
@@ -27,26 +28,23 @@ class EmotionsStage(Stage):
 
     def run(self, state: dict) -> StageResult:
         ctx = self.ctx
-        portraits = ctx.character_data.get("packages", {}).get("portraits", {})
+        portraits = ctx.pkg("portraits")
         emotions = portraits.get("emotions", [])
 
         if not emotions:
             return StageResult(status="skipped", error="No emotions declared")
 
-        emotions_dir = ctx.emotions_dir
-        emotions_dir.mkdir(parents=True, exist_ok=True)
+        ctx.emotions_dir.mkdir(parents=True, exist_ok=True)
 
         outfit = portraits.get("outfit", "default")
 
         # VNCCS expects JSON-encoded string arrays for costumes/emotions
         # Costume name must match what CharacterCreator used ("Naked" is the default)
         costume_name = "Naked" if outfit == "default" else outfit
-        # VNCCS bug: CharacterCreator ignores new_character_name, uses existing_character.
-        # When existing_character="None", the character is registered as "None".
-        vnccs_char_name = "None"  # Will be fixed when upstream patches new_character_name
+
         patches = {
             self._EMOTION_NODE: {
-                "character": vnccs_char_name,
+                "character": VNCCS_CHAR_NAME,
                 "costumes_data": json.dumps([costume_name]),
                 "emotions_data": json.dumps(emotions),
             },
@@ -70,11 +68,12 @@ class EmotionsStage(Stage):
         if not images:
             return StageResult(status="failed", error="Emotions produced no output")
 
+        # Save with emotion names instead of indices
         artifacts = []
         for i, img_bytes in enumerate(images):
             idx = min(i, len(emotions) - 1) if emotions else 0
             emotion_name = emotions[idx].replace(" ", "_")
-            out_path = emotions_dir / f"{emotion_name}.png"
+            out_path = ctx.emotions_dir / f"{emotion_name}.png"
             out_path.write_bytes(img_bytes)
             artifacts.append(str(out_path.relative_to(ctx.output_dir)))
 

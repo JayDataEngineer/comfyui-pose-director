@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import shutil
-from pathlib import Path
-
+from build_v2.context import VNCCS_CHAR_NAME
 from build_v2.stages.base import Stage, StageResult
 
 
@@ -40,34 +38,28 @@ class LoraStage(Stage):
         lora_dir = ctx.output_dir / "lora"
         lora_dir.mkdir(parents=True, exist_ok=True)
 
-        # VNCCS bug: character registered as "None" (see sheet stage)
-        vnccs_char_name = "None"
         game_name = ctx.character_data.get("character", {}).get("game_name", "PoseDirector")
 
         patches = {
             self._DATASET_NODE: {
-                "character": vnccs_char_name,
+                "character": VNCCS_CHAR_NAME,
                 "game_name": game_name,
             },
         }
 
         try:
-            images = self.executor.run_api_workflow(
+            self.executor.run_api_workflow(
                 workflow_path=ctx.api_workflows_dir / "vnccs_step5_lora_dataset.json",
                 patches=patches,
                 output_node_id=self._SAVE_NODE,
                 timeout=600,
             )
-        except Exception as e:
+        except Exception:
             # DatasetGenerator returns STRING (path), not IMAGE — may fail on output parsing.
             # The actual dataset is in VNCCS's output directory on the ComfyUI server.
-            # Try to find it by looking at VNCCS character output path.
             pass
 
         # DatasetGenerator writes to VNCCS base_output_dir/{character}/lora/
-        # On remote, this is typically ComfyUI/output/vnccs/{character}/lora/
-        # We need to either fetch via API or copy from mounted volume.
-        # For now, mark as complete if the workflow ran without error.
         # TODO: fetch the generated dataset from ComfyUI server.
 
         artifacts = [str(p.relative_to(ctx.output_dir)) for p in lora_dir.rglob("*") if p.is_file()]
@@ -75,5 +67,5 @@ class LoraStage(Stage):
         return StageResult(
             status="complete" if artifacts else "skipped",
             artifacts=artifacts,
-            meta={"source": "vnccs_step5_lora", "character": vnccs_char_name},
+            meta={"source": "vnccs_step5_lora", "character": VNCCS_CHAR_NAME},
         )

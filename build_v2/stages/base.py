@@ -60,3 +60,25 @@ class Stage(ABC):
             if not full_path.exists():
                 return False
         return True
+
+    def _save_artifacts(
+        self, images: list[bytes], target_dir, prefix: str, naming: str = "index"
+    ) -> list[str]:
+        """Save image bytes to disk and return relative artifact paths.
+
+        Args:
+            images: Raw image bytes from ComfyUI.
+            target_dir: Directory to write files into (created if needed).
+            prefix: Filename prefix (e.g., outfit name, state name).
+            naming: "index" for prefix_000.png, "emotion" for emotion_name.png.
+
+        Returns:
+            List of paths relative to output_dir.
+        """
+        target_dir.mkdir(parents=True, exist_ok=True)
+        artifacts = []
+        for i, img_bytes in enumerate(images):
+            out_path = target_dir / f"{prefix}_{i:03d}.png"
+            out_path.write_bytes(img_bytes)
+            artifacts.append(str(out_path.relative_to(self.ctx.output_dir)))
+        return artifacts

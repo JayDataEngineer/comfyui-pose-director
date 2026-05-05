@@ -10,4 +10,4 @@ from build_v2.stages.lora import LoraStage
 from build_v2.stages.state import StateStage
 from build_v2.stages.trellis import TrellisStage
 from build_v2.stages.video import VideoStage
-from build_v2.stages.placeholders import GodotStage
+from build_v2.stages.godot import GodotStage

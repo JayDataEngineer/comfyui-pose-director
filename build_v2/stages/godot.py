@@ -1,11 +1,4 @@
-"""Godot export stage and placeholder base class.
-
-GodotStage is fully implemented. Other stages that were previously
-placeholders have been moved to their own modules:
-- state.py (StateStage)
-- trellis.py (TrellisStage)
-- video.py (VideoStage)
-"""
+"""Godot export stage — export sprites to Godot 4.x project structure."""
 
 from __future__ import annotations
 
@@ -14,17 +7,6 @@ import sys
 from pathlib import Path
 
 from build_v2.stages.base import Stage, StageResult
-
-
-class _Placeholder(Stage):
-    """Stage that reports skipped without error."""
-    reason: str = "not yet implemented"
-
-    def is_complete(self, state: dict) -> bool:
-        return False
-
-    def run(self, state: dict) -> StageResult:
-        return StageResult(status="skipped", error=self.reason)
 
 
 class GodotStage(Stage):

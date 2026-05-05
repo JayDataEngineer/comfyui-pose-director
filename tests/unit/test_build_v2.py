@@ -415,7 +415,7 @@ class TestAllStages:
         assert "sprites_static" in s.depends_on
 
     def test_godot_stage(self):
-        from build_v2.stages.placeholders import GodotStage
+        from build_v2.stages.godot import GodotStage
         s = GodotStage(None)
         assert s.name == "godot"
         assert s.tier_required == "t1"

@@ -31,7 +31,7 @@ from build_v2.stages.lora import LoraStage
 from build_v2.stages.state import StateStage
 from build_v2.stages.trellis import TrellisStage
 from build_v2.stages.video import VideoStage
-from build_v2.stages.placeholders import GodotStage
+from build_v2.stages.godot import GodotStage
 
 
 def log(msg: str):
@@ -47,10 +47,10 @@ ALL_STAGE_CLASSES = [
     SpritesStaticStage,  # t1  — static sprite sheet
     SpritesAnimatedStage,# t1.5 — animated sprites (HY-Motion + Anny)
     OutfitStage,         # t2  — outfit variant
-    TrellisStage,        # t2  — 3D model (placeholder)
-    StateStage,          # t1  — state re-edit (placeholder)
-    VideoStage,          # t1.5— LTX video (placeholder)
-    GodotStage,          # t1  — Godot export (placeholder)
+    TrellisStage,        # t2  — 3D model
+    StateStage,          # t1  — state re-edit
+    VideoStage,          # t1.5— LTX video
+    GodotStage,          # t1  — Godot export
     LoraStage,           # t3  — LoRA training dataset
 ]
 

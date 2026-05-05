@@ -7,12 +7,12 @@
         0
       ],
       "clip": [
-        "696",
-        1
+        "696_clip",
+        0
       ],
       "vae": [
-        "696",
-        2
+        "696_vae",
+        0
       ],
       "seed_int": 0,
       "sample_steps": [
@@ -85,12 +85,12 @@
     "class_type": "VNCCS_Pipe",
     "inputs": {
       "model": [
-        "732",
+        "696",
         0
       ],
       "clip": [
-        "732",
-        1
+        "696_clip",
+        0
       ],
       "pos": [
         "735",
@@ -393,12 +393,6 @@
         "694",
         0
       ]
-    }
-  },
-  "696": {
-    "class_type": "CheckpointLoaderSimple",
-    "inputs": {
-      "ckpt_name": "Illustrious\\ILFlatMix.safetensors"
     }
   },
   "697": {
@@ -860,25 +854,6 @@
       "vae_name": "qwen_image_vae.safetensors"
     }
   },
-  "732": {
-    "class_type": "LoraLoader",
-    "inputs": {
-      "model": [
-        "415",
-        0
-      ],
-      "clip": [
-        "415",
-        1
-      ],
-      "lora_name": "IL\\mimimeter.safetensors",
-      "strength_model": 1,
-      "strength_clip": [
-        "499",
-        3
-      ]
-    }
-  },
   "733": {
     "class_type": "PrimitiveString",
     "inputs": {
@@ -905,8 +880,8 @@
         0
       ],
       "clip": [
-        "732",
-        1
+        "696_clip",
+        0
       ]
     }
   },
@@ -918,8 +893,8 @@
         0
       ],
       "clip": [
-        "732",
-        1
+        "696_clip",
+        0
       ]
     }
   },
@@ -1641,6 +1616,26 @@
       "noise_mask_feather": 20,
       "tiled_encode": true,
       "tiled_decode": true
+    }
+  },
+  "696": {
+    "class_type": "LoadDiffusionModel",
+    "inputs": {
+      "model_name": "z_image_turbo_bf16.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "696_clip": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "qwen_3_4b.safetensors",
+      "type": "lumina2"
+    }
+  },
+  "696_vae": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "ae.safetensors"
     }
   }
 }

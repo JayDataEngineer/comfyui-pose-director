@@ -23,8 +23,7 @@ class SheetStage(Stage):
     _SAVE_IMAGE_NODE = "15"
     _CHARACTER_CREATOR_NODE = "499"
 
-    # Remote deployment overrides (see build_v2/api_patcher.py for why)
-    _CHECKPOINT = "sd_xl_base_1.0.safetensors"  # ILFlatMix fails mmap on Docker
+    # Remote deployment overrides
     _RMBG_MODEL = "BEN2"  # RMBG-2.0 needs writeable cache, INSPYRENET needs extra pkg
 
     def is_complete(self, state: dict) -> bool:
@@ -67,7 +66,6 @@ class SheetStage(Stage):
                 patches=patches,
                 output_node_id=self._SAVE_IMAGE_NODE,
                 timeout=1800,  # ~22 min on RTX 4090 (3 QWEN encoder passes)
-                checkpoint_override=self._CHECKPOINT,
                 rmbg_override=self._RMBG_MODEL,
             )
         except Exception as e:

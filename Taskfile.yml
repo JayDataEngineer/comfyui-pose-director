@@ -184,7 +184,7 @@ tasks:
       - task: comfyui:start
       - task: llama:stop
       - echo "=== Running E2E tests ==="
-      - ZAI_API_KEY=REDACTED_ZAI_KEY RUN_E2E=1 uv run pytest tests/e2e/ -v -s {{.CLI_ARGS}}
+      - ZAI_API_KEY=${ZAI_API_KEY:?export ZAI_API_KEY first} RUN_E2E=1 uv run pytest tests/e2e/ -v -s {{.CLI_ARGS}}
       - task: llama:start
 
   e2e:quick:
